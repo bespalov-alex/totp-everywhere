@@ -13,7 +13,7 @@ function displayBytes() {
     const bytes = [...received.values()].reduce((sum, size) => sum + size, 0);
     progress.max = total;
     progress.value = Math.min(bytes, total);
-    status.textContent = `Downloading app resources · ${mib(bytes)} / ${mib(total)} MiB`;
+    status.textContent = `Downloading app resources · ${mib(bytes)} / ${mib(total)} MiB decoded`;
 }
 
 async function loadResource(url, integrity) {
