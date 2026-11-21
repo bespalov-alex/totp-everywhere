@@ -19,6 +19,7 @@ public sealed class App : Application
     internal static Uri IconUri { get; } = new("avares://Totp.App/Assets/icon.png");
 
     public static VaultKeyDeriver? KeyDeriver { get; set; }
+    public static Action<string, byte[]>? DownloadFile { get; set; }
 
     public static Func<Task<Stream?>> CapturePhoto { get; set; } =
         () => throw new InvalidOperationException("Camera unavailable.");

@@ -1,10 +1,10 @@
 # TOTP Everywhere
 
-A local authenticator for Windows, macOS, Linux, iOS, and the web. It generates six- and eight-digit codes from the device clock using RFC 6238.
+A local authenticator for Windows, macOS, Linux, iOS, Android, and the web. It generates six- and eight-digit codes from the device clock using RFC 6238.
 
 ## Run from source
 
-Install the .NET 10 SDK. Run these commands from the repository root. The full solution includes iOS and requires macOS, Xcode, and both workloads. [Download .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0)
+Install the .NET 10 SDK. Run these commands from the repository root. The full solution includes iOS and requires macOS, Xcode, and the iOS, Android, and WebAssembly workloads. [Download .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Desktop
 
@@ -41,6 +41,18 @@ dotnet build src/Totp.iOS -t:Run -r iossimulator-arm64 --no-restore
 
 Use `iossimulator-x64` on Intel. QR images can be imported in the simulator. Camera capture requires a physical device and a signed `ios-arm64` build.
 
+### Android
+
+Install the Android SDK and JDK 21, then install the .NET Android workload. Publish an APK for a physical ARM64 device and install it using Android Debug Bridge.
+
+```sh
+dotnet workload install android
+dotnet publish src/Totp.Android -c Release -r android-arm64 -o publish/android
+adb install publish/android/com.bespalov.totpeverywhere-Signed.apk
+```
+
+The GitHub Actions APK uses a development signing key. Signing keys can differ between runs, so export your vault before replacing an installation that Android cannot update in place.
+
 ## Download builds
 
 Open **Actions → Build downloadable artifacts → Run workflow**, select the platforms, and download files from **Artifacts** in the completed run.
@@ -53,6 +65,7 @@ Open **Actions → Build downloadable artifacts → Run workflow**, select the p
 | Windows x64 | `TotpEverywhere-win-x64` | Extract and run the self-contained `Totp.Desktop.exe`. |
 | iOS Simulator | `TotpEverywhere-iossimulator-arm64` | Extract the inner ZIP and run `xcrun simctl install booted ./Totp.iOS.app`. |
 | iOS device | `TotpEverywhere-ios-arm64` | Sign the extracted `.app` with an Apple certificate and provisioning profile before installing. |
+| Android ARM64 | `TotpEverywhere-android-arm64` | Extract and install the APK on an Android 6.0 or later device. |
 | Web | `TotpEverywhere-web` | Extract the TAR archive. Serve its contents, including `index.html` and `_framework`, from a static web host. |
 
 The macOS app uses an ad hoc signature. If Gatekeeper blocks a trusted download, try opening it first and then choose **System Settings → Privacy & Security → Open Anyway** when available. Automatic trust for distributed macOS builds requires Developer ID signing and Apple notarization.
@@ -71,15 +84,24 @@ The macOS app uses an ad hoc signature. If Gatekeeper blocks a trusted download,
 | Windows | `%LOCALAPPDATA%\TotpEverywhere` |
 | Linux | `$XDG_DATA_HOME/TotpEverywhere`, or `~/.local/share/TotpEverywhere` |
 | iOS | The app’s private data directory, shown under **Storage settings** |
+| Android | The app’s private data directory, shown under **Storage settings** |
 | Web | Browser local storage for the current site and browser profile |
 
 The vault uses AES-256-GCM with a fresh nonce for each write and a key derived from the username and password using PBKDF2-HMAC-SHA256 with 600,000 iterations and a random salt. A hash of the username identifies each profile. Clearing site data removes the web vault. Keep a copy of the encrypted files if you need a desktop backup.
+
+## Transfer an encrypted vault
+
+1. On the source device, sign in and open **Transfer vault**. Export the JSON file or choose **Show transfer QR** when the data fits in one QR code.
+2. On the destination device, select **Import vault** on the sign-in screen, or **Transfer vault** if already signed in. Open the JSON file, scan the QR code, or upload its image.
+3. Enter the source username and password. An import creates the profile if it is new. If a local profile already exists with the same credentials, the app merges accounts and skips identical entries. It does not remove local entries. If the local password differs, make the passwords match before importing.
+
+The file and QR contain the format version, source platform, a generic description, the username, a CRC-32 checksum, and the encrypted vault. The username and other metadata are visible. Service names, account labels, and TOTP keys remain inside the AES-GCM ciphertext. The checksum detects corruption. Authentication uses the vault encryption key, derived from the username and password. Each export retains the password that was in use when it was created.
 
 ## Project layout and tests
 
 - `Totp.Core` implements code generation, QR parsing, and encrypted storage.
 - `Totp.App` contains the shared interface and QR image decoding.
-- `Totp.Desktop`, `Totp.iOS`, and `Totp.Browser` connect the interface to each platform.
+- `Totp.Desktop`, `Totp.iOS`, `Totp.Android`, and `Totp.Browser` connect the interface to each platform.
 - `Totp.Tests` covers the core behavior with xUnit.
 
 ```sh

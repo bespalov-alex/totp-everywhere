@@ -87,15 +87,7 @@ public sealed class Vault : IDisposable
     public static async Task<Vault> OpenAsync(IVaultStorage storage, string login, string password, bool register = false,
         VaultKeyDeriver? keyDeriver = null)
     {
-        login = login.Trim().Normalize();
-        if (login.Length is < 1 or > 128 || password.Length is < 1 or > 1024)
-            throw new ArgumentException("Enter your username and password.");
-        var hash = new Sha256Digest();
-        var loginBytes = Encoding.UTF8.GetBytes(login);
-        hash.BlockUpdate(loginBytes, 0, loginBytes.Length);
-        var idBytes = new byte[hash.GetDigestSize()];
-        hash.DoFinal(idBytes, 0);
-        var id = Convert.ToHexString(idBytes);
+        var id = ProfileId(ref login, password);
         var snapshot = storage.Read(id);
         if (register && snapshot is not null)
             throw new InvalidOperationException("This username is already registered.");
@@ -104,6 +96,73 @@ public sealed class Vault : IDisposable
         if (register)
             ValidateNewPassword(password);
 
+        return await UnlockAsync(storage, login, id, password, snapshot, keyDeriver);
+    }
+
+    public VaultTransfer ExportTransfer(string source)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        return VaultTransfer.Create(login, source, snapshot);
+    }
+
+    public static async Task<Vault> ImportTransferAsync(IVaultStorage storage, string text, string login,
+        string password, VaultKeyDeriver? keyDeriver = null)
+    {
+        var transfer = VaultTransfer.Parse(text);
+        var id = ProfileId(ref login, password);
+        if (!string.Equals(login, transfer.Login, StringComparison.Ordinal))
+            throw new CryptographicException("Incorrect username or password for this transfer.");
+
+        // Authenticate the incoming vault before creating or modifying any local profile.
+        var imported = await UnlockAsync(storage, login, id, password, transfer.Vault, keyDeriver);
+        try
+        {
+            var localSnapshot = storage.Read(id);
+            if (localSnapshot is null)
+            {
+                await storage.ReplaceAsync(id, null, transfer.Vault);
+                return imported;
+            }
+
+            var local = await UnlockAsync(storage, login, id, password, localSnapshot, keyDeriver);
+            try
+            {
+                await local.AddAsync(imported.Accounts);
+                return local;
+            }
+            catch
+            {
+                local.Dispose();
+                throw;
+            }
+            finally
+            {
+                imported.Dispose();
+            }
+        }
+        catch
+        {
+            imported.Dispose();
+            throw;
+        }
+    }
+
+    private static string ProfileId(ref string login, string password)
+    {
+        login = login.Trim().Normalize();
+        if (login.Length is < 1 or > 128 || password.Length is < 1 or > 1024)
+            throw new ArgumentException("Enter your username and password.");
+        var hash = new Sha256Digest();
+        var loginBytes = Encoding.UTF8.GetBytes(login);
+        hash.BlockUpdate(loginBytes, 0, loginBytes.Length);
+        var idBytes = new byte[hash.GetDigestSize()];
+        hash.DoFinal(idBytes, 0);
+        return Convert.ToHexString(idBytes);
+    }
+
+    private static async Task<Vault> UnlockAsync(IVaultStorage storage, string login, string id, string password,
+        string? snapshot, VaultKeyDeriver? keyDeriver)
+    {
         var envelope = snapshot is null ? null : ReadEnvelope(snapshot);
         var salt = envelope?.Salt ?? RandomNumberGenerator.GetBytes(16);
         keyDeriver ??= DeriveOnDeviceAsync;
