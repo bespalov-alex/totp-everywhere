@@ -28,6 +28,31 @@ public sealed class App : Application
         Name = "TOTP Everywhere";
         RequestedThemeVariant = ThemeVariant.Dark;
         Styles.Add(new FluentTheme());
+        if (OperatingSystem.IsMacOS())
+        {
+            // Supplying an application menu replaces the framework's default About item.
+            var menu = new NativeMenu();
+            var about = new NativeMenuItem("About TOTP Everywhere");
+            about.Click += async (_, _) =>
+            {
+                if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime { MainWindow: { } owner })
+                    return;
+
+                await new Window
+                {
+                    Title = "About TOTP Everywhere",
+                    Width = 350, Height = 115, CanResize = false,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Content = new TextBlock
+                    {
+                        Text = "Local authenticator for time-based one-time passwords.",
+                        Margin = new Thickness(22), TextWrapping = TextWrapping.Wrap
+                    }
+                }.ShowDialog(owner);
+            };
+            menu.Add(about);
+            NativeMenu.SetMenu(this, menu);
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()

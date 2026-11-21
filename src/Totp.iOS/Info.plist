@@ -10,6 +10,8 @@
     <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
+    <key>XSAppIconAssets</key>
+    <string>Assets.xcassets/AppIcon.appiconset</string>
     <key>NSCameraUsageDescription</key>
     <string>The camera is used to import accounts from QR codes.</string>
     <key>UIDeviceFamily</key>
