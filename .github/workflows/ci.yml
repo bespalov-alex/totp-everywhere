@@ -45,7 +45,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.404
-      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
       - run: dotnet workload install ios --skip-manifest-update
+      - name: Select Xcode for the installed iOS workload
+        run: |
+          version=$(dotnet msbuild src/Totp.iOS -nologo -getProperty:_RecommendedXcodeVersion)
+          xcode="/Applications/Xcode_${version}.app"
+          test -d "$xcode" || { echo "Required Xcode $version is unavailable."; exit 1; }
+          sudo xcode-select -s "$xcode"
       - run: dotnet restore src/Totp.iOS -r iossimulator-arm64
       - run: dotnet build src/Totp.iOS -c Release -r iossimulator-arm64 --no-restore
