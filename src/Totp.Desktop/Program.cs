@@ -15,9 +15,11 @@ internal static class Program
     private static async Task<Stream?> Capture()
     {
         var camera = Environment.GetEnvironmentVariable("TOTP_CAMERA");
+        const string homebrewFfmpeg = "/opt/homebrew/bin/ffmpeg";
         var start = new ProcessStartInfo
         {
-            FileName = "ffmpeg", RedirectStandardOutput = true, RedirectStandardError = true,
+            FileName = OperatingSystem.IsMacOS() && File.Exists(homebrewFfmpeg) ? homebrewFfmpeg : "ffmpeg",
+            RedirectStandardOutput = true, RedirectStandardError = true,
             UseShellExecute = false, CreateNoWindow = true
         };
         string[] input = OperatingSystem.IsWindows() ? ["-f", "dshow", "-i", "video=" + (camera ??

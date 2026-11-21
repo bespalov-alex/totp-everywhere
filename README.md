@@ -62,10 +62,15 @@ dotnet build src/Totp.iOS -t:Run -r iossimulator-arm64 --no-restore
 | Выбор | Артефакт | Запуск |
 | --- | --- | --- |
 | Linux | `TotpEverywhere-linux-x64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop`. |
+| macOS Apple Silicon | `TotpEverywhere-osx-arm64-app` | Распакуйте ZIP, переместите `TotpEverywhere.app` в «Программы» и откройте двойным щелчком. |
 | macOS Apple Silicon | `TotpEverywhere-osx-arm64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop` из Terminal. |
 | Windows | `TotpEverywhere-win-x64` | Распакуйте `.zip` и запустите `Totp.Desktop.exe`. |
 | iOS | `TotpEverywhere-iossimulator-arm64` | Распакуйте `.app` и установите в запущенный симулятор командой `xcrun simctl install booted ./Totp.iOS.app`. |
 | iOS | `TotpEverywhere-ios-arm64` | Сборка `.app` для физического устройства. Перед установкой требуется подписать её сертификатом Apple и подходящим provisioning profile. |
+
+Пакет macOS имеет локальную подпись ad hoc. Для её создания не нужна учётная запись Apple Developer. Gatekeeper может заблокировать первый запуск скачанного пакета. Если вы доверяете источнику, попробуйте открыть приложение, затем выберите **Системные настройки → Конфиденциальность и безопасность → Открыть всё равно**, если эта кнопка доступна. Для автоматического доверия при распространении нужны Developer ID и нотарификация Apple.
+
+Для камеры при запуске из Finder установите FFmpeg командой `brew install ffmpeg`. Приложение находит FFmpeg в стандартном каталоге Homebrew на Apple Silicon.
 
 Артефакты GitHub скачиваются как ZIP с архивом приложения внутри. Сохраняйте все файлы распакованного приложения в одном каталоге. Сборки Desktop включают среду выполнения .NET.
 
