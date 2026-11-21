@@ -20,12 +20,16 @@ internal static class Program
             FileName = "ffmpeg", RedirectStandardOutput = true, RedirectStandardError = true,
             UseShellExecute = false, CreateNoWindow = true
         };
-        string[] input = OperatingSystem.IsWindows() ? ["dshow", "video=" + (camera ??
+        string[] input = OperatingSystem.IsWindows() ? ["-f", "dshow", "-i", "video=" + (camera ??
             throw new InvalidOperationException("Задайте имя камеры в переменной TOTP_CAMERA."))]
-            : OperatingSystem.IsMacOS() ? ["avfoundation", (camera ?? "0") + ":none"]
-            : ["v4l2", camera ?? "/dev/video0"];
-        foreach (var argument in new[] { "-nostdin", "-hide_banner", "-loglevel", "error", "-f", input[0],
-                     "-i", input[1], "-ss", "1", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1" })
+            : OperatingSystem.IsMacOS() ? ["-f", "avfoundation", "-framerate", "30", "-i", (camera ?? "0") + ":none"]
+            : ["-f", "v4l2", "-i", camera ?? "/dev/video0"];
+        string[] arguments =
+        [
+            "-nostdin", "-hide_banner", "-loglevel", "error", ..input,
+            "-ss", "1", "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"
+        ];
+        foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
 
         using var process = new Process { StartInfo = start };
