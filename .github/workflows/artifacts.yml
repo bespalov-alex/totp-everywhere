@@ -22,6 +22,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/artifacts.yml'
+      - 'packaging/macos/**'
 
 permissions:
   contents: read
@@ -91,6 +92,30 @@ jobs:
         with:
           name: TotpEverywhere-${{ matrix.rid }}
           path: dist/
+          if-no-files-found: error
+
+      - name: Package macOS app bundle
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          app="bundle/TotpEverywhere.app"
+          mkdir -p "$app/Contents/MacOS" macos-app
+          ditto publish "$app/Contents/MacOS"
+          cp packaging/macos/Info.plist "$app/Contents/Info.plist"
+          plutil -lint "$app/Contents/Info.plist"
+          test -x "$app/Contents/MacOS/Totp.Desktop"
+          find "$app/Contents/MacOS" -type f -name '*.dylib' \
+            -exec codesign --force --sign - --timestamp=none {} +
+          codesign --force --sign - --timestamp=none "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          ditto -c -k --keepParent "$app" macos-app/TotpEverywhere-osx-arm64-app.zip
+          ditto -x -k macos-app/TotpEverywhere-osx-arm64-app.zip bundle/verified
+          codesign --verify --deep --strict --verbose=2 bundle/verified/TotpEverywhere.app
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: TotpEverywhere-osx-arm64-app
+          path: macos-app/TotpEverywhere-osx-arm64-app.zip
           if-no-files-found: error
 
   ios:
