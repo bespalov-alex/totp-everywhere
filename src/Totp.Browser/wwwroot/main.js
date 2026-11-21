@@ -1,4 +1,5 @@
-import { dotnet } from "./_framework/dotnet.js";
+import { startApp } from "./startup.js";
+import "./drive.js";
 
 // Web Locks serialize writes from different tabs of the same origin.
 const storageKey = id => "totp-everywhere:" + id;
@@ -96,5 +97,13 @@ globalThis.totpCamera = async () => {
     }
 };
 
-const runtime = await dotnet.create();
-await runtime.runMain(runtime.getConfig().mainAssemblyName, []);
+// Start after the HTML loader is visible. Report failures even if the runtime module cannot be fetched.
+try {
+    const { dotnet } = await import("./_framework/dotnet.js");
+    await startApp(dotnet);
+} catch (error) {
+    console.error("Could not load the .NET runtime.", error);
+    document.getElementById("boot-progress").hidden = true;
+    document.getElementById("boot-status").textContent = "The app could not load. Check your connection and try again.";
+    document.getElementById("boot-retry").hidden = false;
+}

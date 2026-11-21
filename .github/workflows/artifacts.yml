@@ -181,6 +181,7 @@ jobs:
       - name: Publish static site
         run: |
           dotnet publish src/Totp.Browser -c Release -o publish
+          python3 scripts/write-web-sizes.py publish/wwwroot
           test -f publish/wwwroot/index.html
           test -f publish/wwwroot/icon.png
           mkdir dist

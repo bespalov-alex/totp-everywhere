@@ -7,6 +7,7 @@ on:
       - 'global.json'
       - '.github/workflows/pages.yml'
       - 'scripts/check-web-publish.py'
+      - 'scripts/write-web-sizes.py'
       - 'src/Totp.Browser/**'
 
 permissions:
@@ -27,8 +28,11 @@ jobs:
           global-json-file: global.json
       - run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish WebAssembly site
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ vars.GOOGLE_DRIVE_CLIENT_ID }}
         run: |
           dotnet publish src/Totp.Browser -c Release -o publish
+          python3 scripts/write-web-sizes.py publish/wwwroot
           test -s publish/wwwroot/index.html
           test -s publish/wwwroot/_framework/dotnet.js
       - name: Verify published site in Chromium

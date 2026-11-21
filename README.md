@@ -107,6 +107,12 @@ The vault uses AES-256-GCM with a fresh nonce for each write and a key derived f
 
 The file and QR contain the format version, source platform, a generic description, the username, a CRC-32 checksum, and the encrypted vault. The username and other metadata are visible. Service names, account labels, and TOTP keys remain inside the AES-GCM ciphertext. The checksum detects corruption. Authentication uses the vault encryption key, derived from the username and password. Each export retains the password that was in use when it was created.
 
+## Manual Google Drive backups
+
+On the web, open **Transfer vault → Export to Google Drive** to upload an encrypted vault. To restore it, open **Import vault → Import from Google Drive**, sign in to Google, choose a backup, and enter the vault username and password. The app uses the `drive.file` permission and lists backups it created with the same Google OAuth project. Drive access happens only when you choose an import or export. The Google access token stays in memory for that operation.
+
+To enable Google sign-in, enable the Google Drive API in a Google Cloud project and create an OAuth client of type **Web application**. Add the exact site origin, without the repository path, to **Authorized JavaScript origins**. For GitHub Pages use `https://bespalov-alex.github.io`. Add test accounts to the OAuth consent configuration if the app is in testing mode. Enter the public OAuth client ID in the app, or set the GitHub Actions repository variable `GOOGLE_DRIVE_CLIENT_ID` and redeploy Pages to prefill it. The flow uses no client secret. [Google OAuth setup](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid)
+
 ## Project layout and tests
 
 - `Totp.Core` implements code generation, QR parsing, and encrypted storage.

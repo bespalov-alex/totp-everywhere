@@ -141,6 +141,11 @@ internal sealed partial class VaultView : UserControl
         rows.Clear();
         body.Children.Clear();
         body.Children.Add(Heading("Add an account"));
+        body.Children.Add(new TextBlock
+        {
+            Text = "Scan or upload a Google Authenticator export or a service setup QR code.",
+            TextWrapping = TextWrapping.Wrap
+        });
         if (pending.Count > 0)
             body.Children.Add(new TextBlock
             {

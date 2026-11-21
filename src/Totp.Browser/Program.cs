@@ -14,6 +14,8 @@ internal static partial class Program
     {
         App.Storage = new BrowserStorage();
         App.KeyDeriver = DeriveKeyAsync;
+        App.ExportDriveBackup = bytes => DriveOperation(() => DriveExport(bytes));
+        App.ImportDriveBackup = () => DriveOperation(DriveImport);
         App.DownloadFile = (name, bytes) =>
         {
             try { Download(name, bytes); }
@@ -47,6 +49,20 @@ internal static partial class Program
     [JSImport("globalThis.totpDeriveKey")]
     [return: JSMarshalAs<JSType.Promise<JSType.String>>]
     private static partial Task<string> DeriveKey(byte[] credential, byte[] salt, int iterations);
+
+    private static async Task<T> DriveOperation<T>(Func<Task<T>> run)
+    {
+        try { return await run(); }
+        catch (JSException ex) { throw new IOException(ex.Message, ex); }
+    }
+
+    [JSImport("globalThis.totpDriveExport")]
+    [return: JSMarshalAs<JSType.Promise<JSType.Boolean>>]
+    private static partial Task<bool> DriveExport(byte[] bytes);
+
+    [JSImport("globalThis.totpDriveImport")]
+    [return: JSMarshalAs<JSType.Promise<JSType.String>>]
+    private static partial Task<string?> DriveImport();
 
     [JSImport("globalThis.totpDownload")]
     private static partial void Download(string name, byte[] bytes);
