@@ -1,6 +1,8 @@
 import { dotnet } from "./_framework/dotnet.js";
 
+// Web Locks serialize writes from different tabs of the same origin.
 const storageKey = id => "totp-everywhere:" + id;
+globalThis.totpOrigin = () => location.origin;
 globalThis.totpRead = id => localStorage.getItem(storageKey(id));
 globalThis.totpReplace = async (id, expected, value) => navigator.locks.request(storageKey(id), () => {
     const key = storageKey(id);
@@ -28,8 +30,8 @@ globalThis.totpDeriveKey = async (credential, salt, iterations) => {
 globalThis.totpCamera = async () => {
     const dialog = document.createElement("dialog");
     const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true });
-    const capture = Object.assign(document.createElement("button"), { textContent: "Снять QR", disabled: true });
-    const cancel = Object.assign(document.createElement("button"), { textContent: "Отмена" });
+    const capture = Object.assign(document.createElement("button"), { textContent: "Capture QR", disabled: true });
+    const cancel = Object.assign(document.createElement("button"), { textContent: "Cancel" });
     dialog.append(video, capture, cancel);
     document.body.append(dialog);
     let stream;

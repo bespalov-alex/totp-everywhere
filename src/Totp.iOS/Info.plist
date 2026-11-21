@@ -11,7 +11,7 @@
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>NSCameraUsageDescription</key>
-    <string>Камера используется для импорта аккаунтов по QR-коду.</string>
+    <string>The camera is used to import accounts from QR codes.</string>
     <key>UIDeviceFamily</key>
     <array><integer>1</integer><integer>2</integer></array>
     <key>UILaunchScreen</key>

@@ -10,6 +10,8 @@
     <string>TOTP Everywhere</string>
     <key>CFBundleDisplayName</key>
     <string>TOTP Everywhere</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -17,7 +19,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>NSCameraUsageDescription</key>
-    <string>Камера используется для импорта аккаунтов по QR-коду.</string>
+    <string>The camera is used to import accounts from QR codes.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

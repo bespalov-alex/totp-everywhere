@@ -22,16 +22,17 @@ public sealed partial class AppDelegate : AvaloniaAppDelegate<App>
     private async Task<Stream?> Capture()
     {
         if (!UIImagePickerController.IsSourceTypeAvailable(UIImagePickerControllerSourceType.Camera))
-            throw new InvalidOperationException("Камера доступна на устройстве iOS.");
+            throw new InvalidOperationException("The camera requires a physical iOS device.");
 
         if (!await AVCaptureDevice.RequestAccessForMediaTypeAsync(AVAuthorizationMediaType.Video))
-            throw new InvalidOperationException("Разрешите приложению доступ к камере в настройках iOS.");
+            throw new InvalidOperationException("Allow camera access in iOS Settings.");
 
         var presenter = Window?.RootViewController
-            ?? throw new InvalidOperationException("Не удалось открыть окно камеры.");
+            ?? throw new InvalidOperationException("Could not open the camera.");
         while (presenter.PresentedViewController is { } presented)
             presenter = presented;
 
+        // Bridge the native camera callbacks to a single asynchronous capture result.
         var result = new TaskCompletionSource<Stream?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var picker = new UIImagePickerController { SourceType = UIImagePickerControllerSourceType.Camera };
         void Finish(Stream? photo, Exception? error = null)
@@ -51,7 +52,7 @@ public sealed partial class AppDelegate : AvaloniaAppDelegate<App>
         {
             using var jpeg = args.OriginalImage?.AsJPEG(0.9f);
             if (jpeg is null)
-                Finish(null, new IOException("Не удалось получить изображение камеры."));
+                Finish(null, new IOException("Could not read the camera image."));
             else
                 Finish(new MemoryStream(jpeg.ToArray(), writable: false));
         };

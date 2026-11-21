@@ -20,7 +20,7 @@ internal static partial class Program
             if (result == "cancel")
                 return null;
             if (result == "error")
-                throw new InvalidOperationException("Камера недоступна. Проверьте разрешения и откройте приложение по HTTPS.");
+                throw new InvalidOperationException("Camera unavailable. Check permissions and open the app over HTTPS.");
             return new MemoryStream(Convert.FromBase64String(result), writable: false);
         };
         return AppBuilder.Configure<App>().StartBrowserAppAsync("app");
@@ -35,7 +35,7 @@ internal static partial class Program
         }
         catch (JSException)
         {
-            throw new CryptographicException("Web Crypto недоступен. Откройте приложение по HTTPS или на localhost.");
+            throw new CryptographicException("Web Crypto is unavailable. Open the app over HTTPS or localhost.");
         }
     }
 
@@ -49,6 +49,11 @@ internal static partial class Program
 
     private sealed partial class BrowserStorage : IVaultStorage
     {
+        public string Location => $"Browser local storage · {Origin()}";
+
+        [JSImport("globalThis.totpOrigin")]
+        private static partial string Origin();
+
         [JSImport("globalThis.totpRead")]
         private static partial string? ReadLocal(string id);
 
@@ -59,7 +64,7 @@ internal static partial class Program
         public string? Read(string id)
         {
             try { return ReadLocal(id); }
-            catch (JSException) { throw new IOException("Браузер заблокировал доступ к хранилищу."); }
+            catch (JSException) { throw new IOException("The browser blocked storage access."); }
         }
 
         public async ValueTask ReplaceAsync(string id, string? expected, string value)
@@ -67,11 +72,11 @@ internal static partial class Program
             try
             {
                 if (!await ReplaceLocal(id, expected, value))
-                    throw new IOException("Хранилище изменилось. Войдите снова и повторите операцию.");
+                    throw new IOException("The vault changed. Sign in again and retry.");
             }
             catch (JSException)
             {
-                throw new IOException("Не удалось сохранить данные в браузере.");
+                throw new IOException("Could not save data in the browser.");
             }
         }
     }

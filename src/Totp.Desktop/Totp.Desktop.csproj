@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>AppIcon.ico</ApplicationIcon>
+    <Product>TOTP Everywhere</Product>
+    <Description>Local authenticator for time-based one-time passwords.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Totp.App/Totp.App.csproj" />
