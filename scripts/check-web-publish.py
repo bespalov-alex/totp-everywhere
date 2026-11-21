@@ -38,6 +38,7 @@ with tempfile.TemporaryDirectory() as root:
                 page.on("response", on_response)
                 page.goto(f"http://127.0.0.1:{server.server_port}/totp-everywhere/")
                 expect(page.locator("canvas").first).to_be_visible(timeout=30000)
+                expect(page.locator("#loading")).to_have_count(0, timeout=30000)
                 page.wait_for_load_state("networkidle")
                 if errors:
                     raise RuntimeError("\n".join(errors))

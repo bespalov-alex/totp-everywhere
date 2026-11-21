@@ -20,6 +20,8 @@ public sealed class App : Application
 
     public static VaultKeyDeriver? KeyDeriver { get; set; }
     public static Action<string, byte[]>? DownloadFile { get; set; }
+    public static Func<byte[], Task<bool>>? ExportDriveBackup { get; set; }
+    public static Func<Task<string?>>? ImportDriveBackup { get; set; }
 
     public static Func<Task<Stream?>> CapturePhoto { get; set; } =
         () => throw new InvalidOperationException("Camera unavailable.");

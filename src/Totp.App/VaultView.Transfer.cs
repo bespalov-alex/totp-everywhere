@@ -29,6 +29,13 @@ internal sealed partial class VaultView
         {
             var transfer = vault.ExportTransfer(TransferSource());
             var qr = transfer.ToQrText();
+            if (App.ExportDriveBackup is { } export)
+                body.Children.Add(Action("Export to Google Drive", async () =>
+                {
+                    status.Text = "Connecting to Google Drive…";
+                    status.Text = await export(Encoding.UTF8.GetBytes(transfer.ToFile()))
+                        ? "Encrypted backup uploaded to Google Drive." : "";
+                }));
             body.Children.Add(Buttons(Action("Export transfer file", () => ExportTransferFile(transfer))));
             if (qr is not null)
                 body.Children.Add(Action("Show transfer QR", () => ShowTransferQr(qr)));
@@ -37,6 +44,15 @@ internal sealed partial class VaultView
                     TextWrapping = TextWrapping.Wrap });
         }
 
+        if (App.ImportDriveBackup is { } import)
+            body.Children.Add(Action("Import from Google Drive", async () =>
+            {
+                status.Text = "Connecting to Google Drive…";
+                var text = await import();
+                status.Text = "";
+                if (text is not null)
+                    ShowTransferCredentials(text);
+            }));
         body.Children.Add(Buttons(
             Action("Import transfer file", ImportTransferFile),
             Action("Scan transfer QR", () => ReadTransferQr(fromCamera: true)),

@@ -8,12 +8,25 @@
     <title>TOTP Everywhere</title>
     <style>
         html, body, #app { width: 100%; height: 100%; margin: 0; background: #202020; }
+        #loading { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; gap: 1rem;
+            padding: 1.5rem; font: 16px system-ui, sans-serif; text-align: center; background: #141e2c; color: #fff; }
+        #loading progress { width: min(80vw, 28rem); height: 1.4rem; accent-color: #77efdc; }
+        #boot-status { margin: 0; }
         dialog { max-width: min(90vw, 640px); }
+        dialog label, dialog input, dialog select { display: block; }
+        dialog input, dialog select { width: min(70vw, 36rem); margin-block: .5rem; }
+        dialog button { margin: .25rem; }
         video { display: block; width: 100%; max-height: 65vh; margin-bottom: 1rem; }
     </style>
 </head>
 <body>
-    <div id="app">Loading TOTP Everywhere…</div>
+    <div id="app"></div>
+    <section id="loading" aria-label="Application startup">
+        <strong>TOTP Everywhere</strong>
+        <progress id="boot-progress" aria-label="Application download progress"></progress>
+        <p id="boot-status" role="status">Connecting…</p>
+        <button id="boot-retry" hidden onclick="location.reload()">Retry</button>
+    </section>
     <script type="module" src="./main.js"></script>
 </body>
 </html>
