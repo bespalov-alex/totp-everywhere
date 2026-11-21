@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Totp.Core/Totp.Core.csproj" />
+    <Project Path="src/Totp.App/Totp.App.csproj" />
+    <Project Path="src/Totp.Desktop/Totp.Desktop.csproj" />
+    <Project Path="src/Totp.Browser/Totp.Browser.csproj" />
+    <Project Path="src/Totp.iOS/Totp.iOS.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Totp.Tests/Totp.Tests.csproj" />
+  </Folder>
+</Solution>

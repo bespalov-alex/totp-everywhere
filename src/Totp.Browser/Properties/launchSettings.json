@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Totp.Browser": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5178"
+    }
+  }
+}
