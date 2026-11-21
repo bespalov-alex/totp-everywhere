@@ -10,21 +10,22 @@ public static class QrImport
 {
     public static ImportPage Parse(string text)
     {
+        text = text.Trim();
         if (text.Length > 64_000 || !Uri.TryCreate(text, UriKind.Absolute, out var uri))
-            throw new FormatException("Некорректный QR-код.");
+            throw new FormatException("Invalid QR code.");
         var query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var parameter in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var pair = parameter.Split('=', 2);
             if (pair.Length != 2 || !query.TryAdd(Uri.UnescapeDataString(pair[0]), Uri.UnescapeDataString(pair[1])))
-                throw new FormatException("Некорректные параметры QR-кода.");
+                throw new FormatException("Invalid QR code parameters.");
         }
 
         return (uri.Scheme, uri.Host) switch
         {
             ("otpauth", "totp") => ParseAccount(uri, query),
             ("otpauth-migration", "offline") => ParseMigration(Required(query, "data")),
-            _ => throw new FormatException("QR-код не содержит поддерживаемых данных TOTP.")
+            _ => throw new FormatException("This QR code does not contain supported TOTP data.")
         };
     }
 
@@ -38,29 +39,29 @@ public static class QrImport
             "SHA1" => TotpAlgorithm.Sha1,
             "SHA256" => TotpAlgorithm.Sha256,
             "SHA512" => TotpAlgorithm.Sha512,
-            _ => throw new FormatException("Неподдерживаемый алгоритм TOTP.")
+            _ => throw new FormatException("Unsupported TOTP algorithm.")
         };
         var digits = int.Parse(query.GetValueOrDefault("digits", "6"), NumberStyles.None, CultureInfo.InvariantCulture);
         var period = int.Parse(query.GetValueOrDefault("period", "30"), NumberStyles.None, CultureInfo.InvariantCulture);
         if (name.Length == 0 || digits is not (6 or 8) || period is < 1 or > 3600)
-            throw new FormatException("Некорректные параметры TOTP.");
+            throw new FormatException("Invalid TOTP settings.");
 
-        return new ImportPage([new(issuer, name, Convert.ToBase64String(DecodeBase32(Required(query, "secret"))),
+        return new ImportPage([new(issuer, name, NormalizeSecret(Required(query, "secret")),
             algorithm, digits, period)], 0);
     }
 
     private static string Required(Dictionary<string, string> query, string key) =>
-        query.TryGetValue(key, out var value) ? value : throw new FormatException("В QR-коде отсутствуют обязательные данные.");
+        query.TryGetValue(key, out var value) ? value : throw new FormatException("The QR code is missing required data.");
 
-    private static byte[] DecodeBase32(string value)
+    public static string NormalizeSecret(string value)
     {
         var data = new List<byte>();
         int bits = 0, buffer = 0;
-        foreach (var character in value.TrimEnd('=').ToUpperInvariant())
+        foreach (var character in string.Concat(value.Where(c => !char.IsWhiteSpace(c))).TrimEnd('=').ToUpperInvariant())
         {
             var digit = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".IndexOf(character);
             if (digit < 0)
-                throw new FormatException("Некорректный секрет Base32.");
+                throw new FormatException("Invalid Base32 secret.");
             buffer = (buffer << 5) | digit;
             bits += 5;
             if (bits >= 8)
@@ -72,14 +73,16 @@ public static class QrImport
         }
 
         if (data.Count == 0 || bits >= 5 || buffer != 0)
-            throw new FormatException("Некорректный секрет Base32.");
-        return data.ToArray();
+            throw new FormatException("Invalid Base32 secret.");
+        return Convert.ToBase64String(data.ToArray());
     }
 
     private static ImportPage ParseMigration(string data)
     {
-        // Google Authenticator MigrationPayload protobuf, version 1.
-        using var input = new CodedInputStream(Convert.FromBase64String(data));
+        // Export links use either regular Base64 or unpadded Base64URL.
+        var encoded = data.Replace('-', '+').Replace('_', '/');
+        encoded = encoded.PadRight((encoded.Length + 3) / 4 * 4, '=');
+        using var input = new CodedInputStream(Convert.FromBase64String(encoded));
         var accounts = new List<TotpAccount>();
         int version = 0, size = 1, index = 0, id = 0, skipped = 0;
         uint tag;
@@ -102,8 +105,15 @@ public static class QrImport
             }
         }
 
-        if (version != 1 || size is < 1 or > 1000 || index < 0 || index >= size || accounts.Count + skipped == 0)
-            throw new FormatException("Некорректный или неподдерживаемый экспорт Google Authenticator.");
+        // Some single-page exports omit the version or encode the batch size as zero.
+        if (size == 0 && index == 0)
+            size = 1;
+        if (version is < 0 or > 2)
+            throw new FormatException($"Google Authenticator export version {version} is unsupported.");
+        if (size is < 1 or > 1000 || index < 0 || index >= size)
+            throw new FormatException("The Google Authenticator export has invalid batch metadata.");
+        if (accounts.Count + skipped == 0)
+            throw new FormatException("The Google Authenticator export contains no accounts.");
         return new ImportPage(accounts, skipped, id, index, size);
     }
 

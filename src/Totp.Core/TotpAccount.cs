@@ -14,6 +14,7 @@ public sealed record TotpAccount(string Issuer, string Name, string Secret, Totp
 {
     public string CodeAt(DateTimeOffset now)
     {
+        // RFC 6238 uses the number of elapsed periods as the HOTP counter.
         var counter = new byte[8];
         BinaryPrimitives.WriteInt64BigEndian(counter, now.ToUnixTimeSeconds() / Period);
         IDigest digest = Algorithm switch
@@ -21,7 +22,7 @@ public sealed record TotpAccount(string Issuer, string Name, string Secret, Totp
             TotpAlgorithm.Sha1 => new Sha1Digest(),
             TotpAlgorithm.Sha256 => new Sha256Digest(),
             TotpAlgorithm.Sha512 => new Sha512Digest(),
-            _ => throw new InvalidOperationException("Неизвестный алгоритм TOTP.")
+            _ => throw new InvalidOperationException("Unknown TOTP algorithm.")
         };
         var mac = new HMac(digest);
         mac.Init(new KeyParameter(Convert.FromBase64String(Secret)));

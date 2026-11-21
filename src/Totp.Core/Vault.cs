@@ -11,12 +11,15 @@ namespace Totp.Core;
 
 public interface IVaultStorage
 {
+    string Location { get; }
     string? Read(string id);
     ValueTask ReplaceAsync(string id, string? expected, string value);
 }
 
 public sealed class FileVaultStorage(string directory) : IVaultStorage
 {
+    public string Location => directory;
+
     public string? Read(string id)
     {
         var path = Path.Combine(directory, id + ".json");
@@ -27,9 +30,10 @@ public sealed class FileVaultStorage(string directory) : IVaultStorage
     {
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, id + ".json");
+        // Serialize compare-and-replace across processes and keep the previous ciphertext until the rename.
         using var guard = File.Open(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         if (Read(id) != expected)
-            throw new IOException("Хранилище изменилось. Войдите снова и повторите операцию.");
+            throw new IOException("The vault changed. Sign in again and retry.");
 
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -85,7 +89,7 @@ public sealed class Vault : IDisposable
     {
         login = login.Trim().Normalize();
         if (login.Length is < 1 or > 128 || password.Length is < 1 or > 1024)
-            throw new ArgumentException("Введите логин и пароль.");
+            throw new ArgumentException("Enter your username and password.");
         var hash = new Sha256Digest();
         var loginBytes = Encoding.UTF8.GetBytes(login);
         hash.BlockUpdate(loginBytes, 0, loginBytes.Length);
@@ -94,9 +98,9 @@ public sealed class Vault : IDisposable
         var id = Convert.ToHexString(idBytes);
         var snapshot = storage.Read(id);
         if (register && snapshot is not null)
-            throw new InvalidOperationException("Этот логин уже зарегистрирован.");
+            throw new InvalidOperationException("This username is already registered.");
         if (!register && snapshot is null)
-            throw new CryptographicException("Неверный логин или пароль.");
+            throw new CryptographicException("Incorrect username or password.");
         if (register)
             ValidateNewPassword(password);
 
@@ -131,17 +135,35 @@ public sealed class Vault : IDisposable
         return added;
     }
 
+    public Task UpdateAccountAsync(TotpAccount current, TotpAccount? replacement)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        var index = Array.IndexOf(accounts, current);
+        if (index < 0)
+            throw new InvalidOperationException("The account is no longer in the vault.");
+        if (replacement is null)
+            return SaveAsync(accounts.Where((_, position) => position != index).ToArray(), key, salt);
+        if (replacement == current)
+            return Task.CompletedTask;
+        if (accounts.Contains(replacement))
+            throw new InvalidOperationException("This account is already in the vault.");
+
+        var updated = (TotpAccount[])accounts.Clone();
+        updated[index] = replacement;
+        return SaveAsync(updated, key, salt);
+    }
+
     public async Task ChangePasswordAsync(string oldPassword, string newPassword)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ValidateNewPassword(newPassword);
         if (oldPassword.Length is < 1 or > 1024)
-            throw new CryptographicException("Неверный старый пароль.");
+            throw new CryptographicException("Incorrect current password.");
         var oldKey = await DeriveAsync(keyDeriver, login, oldPassword, salt);
         var matches = CryptographicOperations.FixedTimeEquals(key, oldKey);
         CryptographicOperations.ZeroMemory(oldKey);
         if (!matches)
-            throw new CryptographicException("Неверный старый пароль.");
+            throw new CryptographicException("Incorrect current password.");
 
         var newSalt = RandomNumberGenerator.GetBytes(16);
         var newKey = await DeriveAsync(keyDeriver, login, newPassword, newSalt);
@@ -170,7 +192,7 @@ public sealed class Vault : IDisposable
     private static void ValidateNewPassword(string password)
     {
         if (password.Length is < 12 or > 1024)
-            throw new ArgumentException("Пароль должен содержать от 12 до 1024 символов.");
+            throw new ArgumentException("The password must contain 12 to 1024 characters.");
     }
 
     private static Task<byte[]> DeriveOnDeviceAsync(byte[] credential, byte[] salt, int iterations) =>
@@ -193,7 +215,7 @@ public sealed class Vault : IDisposable
     {
         var envelope = JsonSerializer.Deserialize(snapshot, VaultJson.Default.VaultEnvelope);
         if (envelope is not { Version: 1, Salt.Length: 16, Nonce.Length: 12, Ciphertext.Length: >= 16 })
-            throw new FormatException("Неподдерживаемый формат хранилища.");
+            throw new FormatException("Unsupported vault format.");
         return envelope;
     }
 
@@ -221,13 +243,13 @@ public sealed class Vault : IDisposable
         }
         catch (Org.BouncyCastle.Crypto.InvalidCipherTextException)
         {
-            throw new CryptographicException("Неверный логин или пароль либо хранилище повреждено.");
+            throw new CryptographicException("Incorrect username or password, or the vault is damaged.");
         }
 
         try
         {
             return JsonSerializer.Deserialize(plaintext, VaultJson.Default.TotpAccountArray)
-                ?? throw new FormatException("Хранилище повреждено.");
+                ?? throw new FormatException("The vault is damaged.");
         }
         finally
         {

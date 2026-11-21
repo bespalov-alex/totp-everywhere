@@ -34,6 +34,21 @@ public class TotpTests
     [InlineData("otpauth-migration://offline?data=")]
     public void RejectsUnsupportedUris(string uri) => Assert.Throws<FormatException>(() => QrImport.Parse(uri));
 
+    // A redacted single-account payload with defaults omitted and URL-safe Base64.
+    [Theory]
+    [InlineData("")]
+    [InlineData("EAIYAA")]
+    public void ImportsSinglePageWithoutPositiveBatchSize(string metadata)
+    {
+        byte[] bytes = [10, 10, 10, 3, 255, 239, 253, 18, 1, 97, 48, 2];
+        var suffix = Convert.FromBase64String(metadata.PadRight((metadata.Length + 3) / 4 * 4, '='));
+        var payload = Convert.ToBase64String([..bytes, ..suffix]);
+        var urlSafe = payload.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var page = QrImport.Parse("otpauth-migration://offline?data=" + urlSafe);
+        Assert.Equal(1, page.BatchSize);
+        Assert.Equal("a", Assert.Single(page.Accounts).Name);
+    }
+
     [Fact]
     public void ImportsGoogleMigrationAndSkipsHotp()
     {

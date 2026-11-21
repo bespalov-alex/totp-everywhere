@@ -19,6 +19,10 @@ on:
         description: Windows x64
         type: boolean
         default: false
+      web:
+        description: Web (static WebAssembly site)
+        type: boolean
+        default: false
   pull_request:
     paths:
       - '.github/workflows/artifacts.yml'
@@ -40,6 +44,7 @@ jobs:
           BUILD_MACOS: ${{ github.event_name == 'pull_request' || inputs.macos }}
           BUILD_IOS: ${{ github.event_name == 'pull_request' || inputs.ios }}
           BUILD_WINDOWS: ${{ github.event_name == 'pull_request' || inputs.windows }}
+          BUILD_WEB: ${{ github.event_name == 'pull_request' || inputs.web }}
         run: |
           set -euo pipefail
           desktop=$(jq -cn '[
@@ -48,7 +53,7 @@ jobs:
             {rid: "win-x64", runner: "windows-latest", enabled: env.BUILD_WINDOWS}
           ] | map(select(.enabled == "true") | del(.enabled))')
           has_desktop=$(jq -r 'length > 0' <<< "$desktop")
-          if [[ "$has_desktop" == false && "$BUILD_IOS" != true ]]; then
+          if [[ "$has_desktop" == false && "$BUILD_IOS" != true && "$BUILD_WEB" != true ]]; then
             echo "::error::Select at least one platform."
             exit 1
           fi
@@ -71,7 +76,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Publish self-contained application
-        shell: bash
+        if: runner.os != 'Windows'
         run: dotnet publish src/Totp.Desktop -c Release -r "$RID" --self-contained true -o publish
       - name: Archive Linux or macOS application
         if: runner.os != 'Windows'
@@ -79,15 +84,14 @@ jobs:
           test -x publish/Totp.Desktop
           mkdir dist
           tar -czf "dist/TotpEverywhere-${RID}.tar.gz" -C publish .
-      - name: Archive Windows application
+      - name: Publish single-file Windows application
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Test-Path publish/Totp.Desktop.exe -PathType Leaf)) {
-            throw "Published executable is missing."
-          }
+          dotnet publish src/Totp.Desktop -c Release -r $env:RID --self-contained true -o publish -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Path dist
-          Compress-Archive -Path publish/* -DestinationPath "dist/TotpEverywhere-${env:RID}.zip"
+          Copy-Item publish/Totp.Desktop.exe dist/Totp.Desktop.exe -ErrorAction Stop
       - uses: actions/upload-artifact@v4
         with:
           name: TotpEverywhere-${{ matrix.rid }}
@@ -99,10 +103,11 @@ jobs:
         run: |
           set -euo pipefail
           app="bundle/TotpEverywhere.app"
-          mkdir -p "$app/Contents/MacOS" macos-app
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" macos-app
           dotnet publish src/Totp.Desktop -c Release -r "$RID" --self-contained true \
             -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o "$app/Contents/MacOS"
           cp packaging/macos/Info.plist "$app/Contents/Info.plist"
+          cp packaging/macos/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
           plutil -lint "$app/Contents/Info.plist"
           test -x "$app/Contents/MacOS/Totp.Desktop"
           find "$app/Contents/MacOS" -type f -name '*.dylib' \
@@ -147,10 +152,35 @@ jobs:
         run: |
           app="src/Totp.iOS/bin/Release/net10.0-ios/$RID/Totp.iOS.app"
           test -f "$app/Info.plist"
+          test -s "$app/Assets.car"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$app/Info.plist"
           mkdir dist
           ditto -c -k --keepParent "$app" "dist/TotpEverywhere-${RID}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: TotpEverywhere-${{ matrix.rid }}
           path: dist/
+          if-no-files-found: error
+
+  web:
+    needs: select
+    if: ${{ github.event_name == 'pull_request' || inputs.web }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet workload install wasm-tools
+      - name: Publish static site
+        run: |
+          dotnet publish src/Totp.Browser -c Release -o publish
+          test -f publish/wwwroot/index.html
+          test -f publish/wwwroot/icon.png
+          mkdir dist
+          tar -czf dist/TotpEverywhere-web.tar.gz -C publish/wwwroot .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TotpEverywhere-web
+          path: dist/TotpEverywhere-web.tar.gz
           if-no-files-found: error

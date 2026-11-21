@@ -1,95 +1,87 @@
 # TOTP Everywhere
 
-Кроссплатформенное приложение на .NET 10 и Avalonia UI для Windows, macOS, Linux, iOS и Web. Создаёт шестизначные и восьмизначные коды по RFC 6238 и показывает оставшееся время действия каждого кода.
+A local authenticator for Windows, macOS, Linux, iOS, and the web. It generates six- and eight-digit codes from the device clock using RFC 6238.
 
-## Структура
+## Run from source
 
-| Проект | Назначение |
-| --- | --- |
-| `Totp.Core` | TOTP, разбор данных QR и шифрование хранилища |
-| `Totp.App` | Общий интерфейс Avalonia и обработка изображений |
-| `Totp.Desktop`, `Totp.iOS`, `Totp.Browser` | Запуск приложения и подключение камеры и хранилища |
-| `Totp.Tests` | xUnit-тесты TOTP, импорта и шифрования |
+Install the .NET 10 SDK. Run these commands from the repository root. The full solution includes iOS and requires macOS, Xcode, and both workloads. [Download .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-## Запуск
-
-Установите .NET 10 SDK и выполняйте команды из корня репозитория. Полное решение `TotpEverywhere.slnx` включает iOS и требует macOS, Xcode и оба workload. [Скачать .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-
-### Windows, macOS и Linux
+### Desktop
 
 ```sh
-dotnet restore src/Totp.Desktop
-dotnet build src/Totp.Desktop --no-restore
-dotnet run --project src/Totp.Desktop --no-build
+dotnet run --project src/Totp.Desktop
 ```
 
-Для камеры установите FFmpeg и добавьте его в `PATH`. Поместите QR-код в кадр и нажмите **Камера**. Приложение сделает снимок примерно через секунду. [Скачать FFmpeg](https://ffmpeg.org/download.html)
+To scan a QR code with a desktop camera, install FFmpeg. On Apple Silicon, `brew install ffmpeg` makes it available to the Finder app. Point the camera at the QR code before choosing **Scan QR with camera**. [Download FFmpeg](https://ffmpeg.org/download.html)
 
-| ОС | Выбор устройства |
+| OS | Camera selection |
 | --- | --- |
-| Windows | Выполните `ffmpeg -list_devices true -f dshow -i dummy`, затем задайте точное имя устройства в PowerShell, например `$env:TOTP_CAMERA = 'Integrated Camera'`. |
-| macOS | По умолчанию используется устройство с индексом 0. Для другого устройства выполните `ffmpeg -f avfoundation -list_devices true -i ""` и задайте индекс, например `export TOTP_CAMERA=1`. При запросе macOS разрешите доступ к камере. |
-| Linux | По умолчанию используется `/dev/video0`. Другую камеру можно выбрать через `export TOTP_CAMERA=/dev/video2`. |
+| Windows | Run `ffmpeg -list_devices true -f dshow -i dummy`. Set the device name in PowerShell, for example `$env:TOTP_CAMERA = 'Integrated Camera'`, then launch the app from that session. |
+| macOS | Index 0 is the default. To choose another camera, use `ffmpeg -f avfoundation -list_devices true -i ""` and set the index with `export TOTP_CAMERA=1`. Grant camera access when macOS asks. |
+| Linux | The default is `/dev/video0`. Set another device with, for example, `export TOTP_CAMERA=/dev/video2`. |
 
 ### Web
 
 ```sh
 dotnet workload install wasm-tools
-dotnet restore src/Totp.Browser
-dotnet build src/Totp.Browser --no-restore
-dotnet run --project src/Totp.Browser --no-build
+dotnet run --project src/Totp.Browser
 ```
 
-Откройте адрес, выведенный в терминале. Используйте актуальный браузер с WebAssembly, Web Crypto и Web Locks. Для доступа к камере, Web Crypto и Web Locks нужен HTTPS или localhost. Во вкладке камеры наведите её на QR и нажмите **Снять QR**.
+Open the URL shown in the terminal. Use a current browser with WebAssembly, Web Crypto, and Web Locks. Serve the published static files over HTTPS or localhost for storage and camera access.
 
 ### iOS
 
-На macOS установите Xcode и совместимый с ним workload iOS. Чтобы запустить симулятор, выберите установленное устройство в приложении Simulator и запустите проект из IDE или терминала. На Apple Silicon:
+Install Xcode and its compatible .NET iOS workload on a Mac. Launch or select an iOS Simulator before running these commands on Apple Silicon.
 
 ```sh
 dotnet workload install ios
-dotnet restore src/Totp.iOS -r iossimulator-arm64
-dotnet build src/Totp.iOS -r iossimulator-arm64 --no-restore
+dotnet build src/Totp.iOS -r iossimulator-arm64
 dotnet build src/Totp.iOS -t:Run -r iossimulator-arm64 --no-restore
 ```
 
-Для Intel Mac используйте `iossimulator-x64`. Для камеры требуется физическое устройство с разрешением на съёмку и подписанной сборкой `ios-arm64`. Загрузку изображений можно использовать и в симуляторе.
+Use `iossimulator-x64` on Intel. QR images can be imported in the simulator. Camera capture requires a physical device and a signed `ios-arm64` build.
 
-## Скачать сборку из GitHub Actions
+## Download builds
 
-На странице **Actions → Build downloadable artifacts** нажмите **Run workflow** и отметьте одну или несколько платформ. После завершения откройте запуск и скачайте архивы из раздела **Artifacts**. Ручной запуск доступен после появления workflow в ветке по умолчанию.
+Open **Actions → Build downloadable artifacts → Run workflow**, select the platforms, and download files from **Artifacts** in the completed run.
 
-| Выбор | Артефакт | Запуск |
+| Platform | Artifact | Use |
 | --- | --- | --- |
-| Linux | `TotpEverywhere-linux-x64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop`. |
-| macOS Apple Silicon | `TotpEverywhere-osx-arm64-app` | Распакуйте ZIP, переместите `TotpEverywhere.app` в «Программы» и откройте двойным щелчком. |
-| macOS Apple Silicon | `TotpEverywhere-osx-arm64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop` из Terminal. |
-| Windows | `TotpEverywhere-win-x64` | Распакуйте `.zip` и запустите `Totp.Desktop.exe`. |
-| iOS | `TotpEverywhere-iossimulator-arm64` | Распакуйте `.app` и установите в запущенный симулятор командой `xcrun simctl install booted ./Totp.iOS.app`. |
-| iOS | `TotpEverywhere-ios-arm64` | Сборка `.app` для физического устройства. Перед установкой требуется подписать её сертификатом Apple и подходящим provisioning profile. |
+| Linux x64 | `TotpEverywhere-linux-x64` | Extract the TAR archive and run `./Totp.Desktop`. |
+| macOS Apple Silicon | `TotpEverywhere-osx-arm64-app` | Extract the inner ZIP, move `TotpEverywhere.app` to Applications, and double-click it. |
+| macOS Apple Silicon | `TotpEverywhere-osx-arm64` | Extract the TAR archive and run `./Totp.Desktop` from Terminal. |
+| Windows x64 | `TotpEverywhere-win-x64` | Extract and run the self-contained `Totp.Desktop.exe`. |
+| iOS Simulator | `TotpEverywhere-iossimulator-arm64` | Extract the inner ZIP and run `xcrun simctl install booted ./Totp.iOS.app`. |
+| iOS device | `TotpEverywhere-ios-arm64` | Sign the extracted `.app` with an Apple certificate and provisioning profile before installing. |
+| Web | `TotpEverywhere-web` | Extract the TAR archive. Serve its contents, including `index.html` and `_framework`, from a static web host. |
 
-Пакет macOS имеет локальную подпись ad hoc. Для её создания не нужна учётная запись Apple Developer. Gatekeeper может заблокировать первый запуск скачанного пакета. Если вы доверяете источнику, попробуйте открыть приложение, затем выберите **Системные настройки → Конфиденциальность и безопасность → Открыть всё равно**, если эта кнопка доступна. Для автоматического доверия при распространении нужны Developer ID и нотарификация Apple.
+The macOS app uses an ad hoc signature. If Gatekeeper blocks a trusted download, try opening it first and then choose **System Settings → Privacy & Security → Open Anyway** when available. Automatic trust for distributed macOS builds requires Developer ID signing and Apple notarization.
 
-Для камеры при запуске из Finder установите FFmpeg командой `brew install ffmpeg`. Приложение находит FFmpeg в стандартном каталоге Homebrew на Apple Silicon.
+## Accounts and storage
 
-Артефакты GitHub скачиваются как ZIP с архивом приложения внутри. Сохраняйте все файлы распакованного приложения в одном каталоге. Сборки Desktop включают среду выполнения .NET.
+1. Register with a username and password of at least 12 characters.
+2. Open **Add account** to enter a Base32 secret, upload a QR image, or scan a QR with the camera. For Google Authenticator, choose **Transfer accounts → Export accounts** and import every QR page in the batch. The app also accepts standard `otpauth://totp` links in QR codes and skips HOTP entries.
+3. Use **Edit** or **Remove** on an account card to manage it. A blank secret field during editing keeps the current key.
+4. Open **Storage settings** from sign-in or from the account list to see the current location. On desktop, **Choose folder** switches to another local directory. Switching signs you out and leaves existing encrypted files in their original directory. **Use default folder** restores the default. To use an existing profile from another location, copy its encrypted `.json` file there while signed out, then select that folder and sign in.
+5. Use **Change password** and provide the current password to re-encrypt the vault.
 
-## Импорт и пароль
+| Platform | Default vault location |
+| --- | --- |
+| macOS | `~/Library/Application Support/TotpEverywhere` |
+| Windows | `%LOCALAPPDATA%\TotpEverywhere` |
+| Linux | `$XDG_DATA_HOME/TotpEverywhere`, or `~/.local/share/TotpEverywhere` |
+| iOS | The app’s private data directory, shown under **Storage settings** |
+| Web | Browser local storage for the current site and browser profile |
 
-1. Введите логин и пароль длиной от 12 символов. При первом запуске нажмите **Регистрация**, при следующих запусках нажимайте **Войти**.
-2. В Google Authenticator откройте **Перенос аккаунтов → Экспорт аккаунтов**. Отсканируйте QR с другого экрана через **Камера** или загрузите его изображение через **Загрузить QR**. Если кодов несколько, загрузите все из одного экспорта. Приложение также читает обычные QR `otpauth://totp`. Записи HOTP пропускаются.
-3. Выберите **Сменить пароль**, введите прежний пароль и дважды новый. Хранилище будет перешифровано с новым ключом.
+The vault uses AES-256-GCM with a fresh nonce for each write and a key derived from the username and password using PBKDF2-HMAC-SHA256 with 600,000 iterations and a random salt. A hash of the username identifies each profile. Clearing site data removes the web vault. Keep a copy of the encrypted files if you need a desktop backup.
 
-Данные хранятся локально и привязаны к профилю. Desktop и iOS используют каталог `TotpEverywhere` внутри `LocalApplicationData`. Web использует локальное хранилище текущего сайта и профиля браузера. Резервной синхронизации и восстановления пароля нет. При очистке данных сайта браузер удалит хранилище.
+## Project layout and tests
 
-Логин и пароль участвуют в выводе ключа PBKDF2-HMAC-SHA256 с 600 000 итераций и случайной солью. Записи шифруются AES-256-GCM. При каждой записи генерируется новый nonce. Хэш нормализованного логина используется как идентификатор профиля.
-
-## Тесты
+- `Totp.Core` implements code generation, QR parsing, and encrypted storage.
+- `Totp.App` contains the shared interface and QR image decoding.
+- `Totp.Desktop`, `Totp.iOS`, and `Totp.Browser` connect the interface to each platform.
+- `Totp.Tests` covers the core behavior with xUnit.
 
 ```sh
-dotnet restore tests/Totp.Tests
-dotnet build tests/Totp.Tests --no-restore
-dotnet test tests/Totp.Tests --no-build --no-restore
+dotnet test tests/Totp.Tests -c Release
 ```
-
-GitHub Actions собирает Desktop на Windows, macOS и Linux, собирает Web и iOS Simulator и запускает xUnit-тесты на трёх Desktop-платформах.

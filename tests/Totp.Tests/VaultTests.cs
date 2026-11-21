@@ -54,8 +54,26 @@ public class VaultTests
         await Assert.ThrowsAsync<CryptographicException>(() => Vault.OpenAsync(storage, Login, OldPassword));
     }
 
+    [Fact]
+    public async Task EditsAndRemovesAccountsInEncryptedVault()
+    {
+        var storage = new MemoryStorage();
+        using var vault = await Vault.OpenAsync(storage, Login, OldPassword, register: true);
+        var other = Account with { Name = "other" };
+        var edited = Account with { Name = "renamed", Period = 60 };
+        await vault.AddAsync([Account, other]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vault.UpdateAccountAsync(Account, other));
+        await vault.UpdateAccountAsync(Account, edited);
+        await vault.UpdateAccountAsync(other, null);
+
+        using var reopened = await Vault.OpenAsync(storage, Login, OldPassword);
+        Assert.Equal(edited, Assert.Single(reopened.Accounts));
+        Assert.DoesNotContain("renamed", Assert.Single(storage.Values.Values));
+    }
+
     private sealed class MemoryStorage : IVaultStorage
     {
+        public string Location => "Test storage";
         public Dictionary<string, string> Values { get; } = [];
         public string? Read(string id) => Values.GetValueOrDefault(id);
         public ValueTask ReplaceAsync(string id, string? expected, string value)

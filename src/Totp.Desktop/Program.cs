@@ -8,6 +8,9 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        var location = new DesktopVaultLocation(App.DefaultVaultDirectory);
+        App.Storage = location.Open();
+        App.SelectVaultDirectory = location.Select;
         App.CapturePhoto = Capture;
         AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(args);
     }
@@ -15,6 +18,7 @@ internal static class Program
     private static async Task<Stream?> Capture()
     {
         var camera = Environment.GetEnvironmentVariable("TOTP_CAMERA");
+        // Finder does not inherit the shell PATH, so check Apple Silicon Homebrew explicitly.
         const string homebrewFfmpeg = "/opt/homebrew/bin/ffmpeg";
         var start = new ProcessStartInfo
         {
@@ -23,7 +27,7 @@ internal static class Program
             UseShellExecute = false, CreateNoWindow = true
         };
         string[] input = OperatingSystem.IsWindows() ? ["-f", "dshow", "-i", "video=" + (camera ??
-            throw new InvalidOperationException("Задайте имя камеры в переменной TOTP_CAMERA."))]
+            throw new InvalidOperationException("Set the camera name in the TOTP_CAMERA environment variable."))]
             : OperatingSystem.IsMacOS() ? ["-f", "avfoundation", "-framerate", "30", "-i", (camera ?? "0") + ":none"]
             : ["-f", "v4l2", "-i", camera ?? "/dev/video0"];
         string[] arguments =
@@ -41,7 +45,7 @@ internal static class Program
         }
         catch (Win32Exception)
         {
-            throw new InvalidOperationException("Установите FFmpeg и добавьте его в PATH для работы камеры.");
+            throw new InvalidOperationException("Install FFmpeg and make it available on PATH.");
         }
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
@@ -55,10 +59,10 @@ internal static class Program
         {
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
-            throw new IOException("Камера не ответила вовремя.");
+            throw new IOException("The camera timed out.");
         }
         if (process.ExitCode != 0 || photo.Length == 0)
-            throw new IOException("Не удалось снять кадр. Проверьте разрешения и выбранное устройство.");
+            throw new IOException("Could not capture a frame. Check the camera permissions and selected device.");
         return new MemoryStream(photo.ToArray(), writable: false);
     }
 }

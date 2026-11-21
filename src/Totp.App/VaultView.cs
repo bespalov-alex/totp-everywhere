@@ -4,6 +4,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using System.Globalization;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Runtime.InteropServices;
@@ -17,7 +20,8 @@ namespace Totp.App;
 
 internal sealed class VaultView : UserControl
 {
-    private readonly IVaultStorage storage;
+    private IVaultStorage storage;
+    private readonly Func<string?, IVaultStorage>? selectVaultDirectory;
     private readonly Func<Task<Stream?>> capturePhoto;
     private readonly VaultKeyDeriver? keyDeriver;
     private readonly StackPanel body = new() { Spacing = 14 };
@@ -28,11 +32,28 @@ internal sealed class VaultView : UserControl
     private Vault? vault;
     private bool busy;
 
-    public VaultView(IVaultStorage storage, Func<Task<Stream?>> capturePhoto, VaultKeyDeriver? keyDeriver)
+    public VaultView(IVaultStorage storage, Func<Task<Stream?>> capturePhoto, VaultKeyDeriver? keyDeriver,
+        Func<string?, IVaultStorage>? selectVaultDirectory)
     {
         this.storage = storage;
         this.capturePhoto = capturePhoto;
         this.keyDeriver = keyDeriver;
+        this.selectVaultDirectory = selectVaultDirectory;
+        using var icon = AssetLoader.Open(App.IconUri);
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 12,
+            Children =
+            {
+                new Image { Source = new Bitmap(icon), Width = 44, Height = 44 },
+                new TextBlock
+                {
+                    Text = "TOTP Everywhere", FontSize = 28, FontWeight = FontWeight.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+        Background = new SolidColorBrush(Color.FromArgb(215, 20, 30, 44));
         Content = new ScrollViewer
         {
             Content = new StackPanel
@@ -40,8 +61,7 @@ internal sealed class VaultView : UserControl
                 MaxWidth = 600, Margin = new Thickness(24, 36), Spacing = 20,
                 Children =
                 {
-                    new TextBlock { Text = "TOTP Everywhere", FontSize = 32, FontWeight = FontWeight.SemiBold },
-                    body, status
+                    header, body, status
                 }
             }
         };
@@ -54,14 +74,15 @@ internal sealed class VaultView : UserControl
     private void ShowLogin()
     {
         body.Children.Clear();
-        var login = new TextBox { Watermark = "Логин", MaxLength = 128 };
-        var password = Password("Пароль");
-        body.Children.Add(new TextBlock { Text = "Локальное хранилище кодов" });
+        var login = new TextBox { Watermark = "Username", MaxLength = 128 };
+        var password = Password("Password");
+        body.Children.Add(new TextBlock { Text = "Local code vault" });
         body.Children.Add(login);
         body.Children.Add(password);
         body.Children.Add(Buttons(
-            Action("Войти", () => Open(login, password, false)),
-            Action("Регистрация", () => Open(login, password, true))));
+            Action("Sign in", () => Open(login, password, false)),
+            Action("Register", () => Open(login, password, true)),
+            Action("Storage settings", () => ShowStorageSettings())));
     }
 
     private async Task Open(TextBox login, TextBox password, bool register)
@@ -77,10 +98,10 @@ internal sealed class VaultView : UserControl
         rows.Clear();
         body.Children.Clear();
         body.Children.Add(Buttons(
-            Action("Загрузить QR", ImportFile),
-            Action("Камера", ImportCamera),
-            Action("Сменить пароль", () => { ShowPasswordChange(); return Task.CompletedTask; }),
-            Action("Выйти", () => { Lock(); ShowLogin(); return Task.CompletedTask; })));
+            Action("Add account", () => ShowAddAccount()),
+            Action("Storage settings", () => ShowStorageSettings()),
+            Action("Change password", () => ShowPasswordChange()),
+            Action("Sign out", () => { Lock(); ShowLogin(); })));
 
         foreach (var account in vault!.Accounts)
         {
@@ -90,7 +111,7 @@ internal sealed class VaultView : UserControl
             body.Children.Add(new Border
             {
                 Padding = new Thickness(16), CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(38, 43, 54)),
+                Background = new SolidColorBrush(Color.FromArgb(195, 42, 60, 78)),
                 Child = new StackPanel
                 {
                     Spacing = 5,
@@ -101,31 +122,177 @@ internal sealed class VaultView : UserControl
                             Text = string.IsNullOrEmpty(account.Issuer) ? account.Name : $"{account.Issuer} · {account.Name}",
                             TextWrapping = TextWrapping.Wrap
                         },
-                        code, remaining
+                        code, remaining,
+                        Buttons(Action("Edit", () => ShowAccountEditor(account)),
+                            Action("Remove", () => ShowRemoveAccount(account)))
                     }
                 }
             });
         }
         if (rows.Count == 0)
-            body.Children.Add(new TextBlock { Text = "Добавьте первый аккаунт по QR-коду." });
+            body.Children.Add(new TextBlock { Text = "Add your first account." });
         RefreshCodes();
     }
+
+    private void ShowAddAccount()
+    {
+        rows.Clear();
+        body.Children.Clear();
+        body.Children.Add(Heading("Add an account"));
+        if (pending.Count > 0)
+            body.Children.Add(new TextBlock
+            {
+                Text = $"Google Authenticator export: {pending.Count} of {pending.Values.First().BatchSize} QR codes."
+            });
+        body.Children.Add(Buttons(
+            Action("Upload QR image", ImportFile),
+            Action("Scan QR with camera", ImportCamera),
+            Action("Enter a secret key", () => ShowAccountEditor()),
+            Action("Back", () => ShowAccounts())));
+    }
+
+    private void ShowAccountEditor(TotpAccount? current = null)
+    {
+        rows.Clear();
+        body.Children.Clear();
+        var issuer = new TextBox { Watermark = "Service (optional)", Text = current?.Issuer };
+        var name = new TextBox { Watermark = "Account name", Text = current?.Name };
+        var secret = Password(current is null ? "Base32 secret key" : "New secret key (optional)");
+        var algorithm = new ComboBox
+        {
+            ItemsSource = new[] { "SHA-1", "SHA-256", "SHA-512" },
+            SelectedIndex = (int)(current?.Algorithm ?? TotpAlgorithm.Sha1)
+        };
+        var digits = new ComboBox { ItemsSource = new[] { 6, 8 }, SelectedIndex = current?.Digits == 8 ? 1 : 0 };
+        var period = new TextBox { Text = (current?.Period ?? 30).ToString(CultureInfo.InvariantCulture), MaxLength = 4 };
+        body.Children.Add(Heading(current is null ? "Enter a secret key" : "Edit account"));
+        foreach (var control in new Control[] { issuer, name, secret, new TextBlock { Text = "Algorithm" },
+                     algorithm, new TextBlock { Text = "Code digits" }, digits,
+                     new TextBlock { Text = "Period in seconds" }, period })
+            body.Children.Add(control);
+
+        body.Children.Add(Buttons(
+            Action("Save", async () =>
+            {
+                var accountName = name.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(accountName))
+                    throw new ArgumentException("Enter an account name.");
+                if (!int.TryParse(period.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) ||
+                    seconds is < 1 or > 3600)
+                    throw new ArgumentException("Enter a period from 1 to 3600 seconds.");
+
+                var value = secret.Text ?? "";
+                var key = current is not null && string.IsNullOrWhiteSpace(value)
+                    ? current.Secret : QrImport.NormalizeSecret(value);
+                var updated = new TotpAccount(issuer.Text?.Trim() ?? "", accountName, key,
+                    (TotpAlgorithm)algorithm.SelectedIndex, (int)digits.SelectedItem!, seconds);
+                if (current is null)
+                {
+                    if (await vault!.AddAsync([updated]) == 0)
+                        throw new InvalidOperationException("This account is already in the vault.");
+                }
+                else
+                    await vault!.UpdateAccountAsync(current, updated);
+
+                secret.Clear();
+                ShowAccounts();
+                status.Text = "Account saved.";
+            }),
+            Action("Back", () =>
+            {
+                if (current is null)
+                    ShowAddAccount();
+                else
+                    ShowAccounts();
+            })));
+    }
+
+    private void ShowRemoveAccount(TotpAccount account)
+    {
+        rows.Clear();
+        body.Children.Clear();
+        body.Children.Add(Heading("Remove account?"));
+        body.Children.Add(new TextBlock { Text = account.Name, TextWrapping = TextWrapping.Wrap });
+        body.Children.Add(Buttons(
+            Action("Remove account", async () =>
+            {
+                await vault!.UpdateAccountAsync(account, null);
+                ShowAccounts();
+                status.Text = "Account removed.";
+            }),
+            Action("Cancel", () => ShowAccounts())));
+    }
+
+    private void ShowStorageSettings()
+    {
+        rows.Clear();
+        body.Children.Clear();
+        body.Children.Add(Heading("Storage location"));
+        body.Children.Add(new SelectableTextBlock { Text = storage.Location, TextWrapping = TextWrapping.Wrap });
+        if (selectVaultDirectory is not null)
+        {
+            body.Children.Add(new TextBlock
+            {
+                Text = "Changing folders signs you out. Existing vault files stay in their original folder.",
+                TextWrapping = TextWrapping.Wrap
+            });
+            body.Children.Add(Buttons(Action("Choose folder", ChangeStorageDirectory),
+                Action("Use default folder", () => SelectStorage(null))));
+        }
+        else
+            body.Children.Add(new TextBlock
+            {
+                Text = OperatingSystem.IsBrowser()
+                    ? "This browser stores the vault for this site and profile."
+                    : "This device stores the vault in the app’s private directory.",
+                TextWrapping = TextWrapping.Wrap
+            });
+        body.Children.Add(Action("Back", () =>
+        {
+            if (vault is null)
+                ShowLogin();
+            else
+                ShowAccounts();
+        }));
+    }
+
+    private async Task ChangeStorageDirectory()
+    {
+        var folders = await TopLevel.GetTopLevel(this)!.StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions { Title = "Choose the vault folder" });
+        if (folders.Count == 0)
+            return;
+        using var folder = folders[0];
+        SelectStorage(folder.TryGetLocalPath() ?? throw new IOException("Choose a local filesystem folder."));
+    }
+
+    private void SelectStorage(string? directory)
+    {
+        // An unlocked vault retains its original storage instance until the session ends.
+        storage = selectVaultDirectory!(directory);
+        Lock();
+        ShowLogin();
+        status.Text = $"Storage location: {storage.Location}";
+    }
+
+    private static TextBlock Heading(string text) =>
+        new() { Text = text, FontSize = 20, FontWeight = FontWeight.SemiBold };
 
     private void ShowPasswordChange()
     {
         rows.Clear();
         body.Children.Clear();
-        var oldPassword = Password("Старый пароль");
-        var newPassword = Password("Новый пароль");
-        var confirmation = Password("Повторите новый пароль");
+        var oldPassword = Password("Current password");
+        var newPassword = Password("New password");
+        var confirmation = Password("Confirm new password");
         body.Children.Add(oldPassword);
         body.Children.Add(newPassword);
         body.Children.Add(confirmation);
         body.Children.Add(Buttons(
-            Action("Сохранить", async () =>
+            Action("Save", async () =>
             {
                 if (newPassword.Text != confirmation.Text)
-                    throw new ArgumentException("Новые пароли не совпадают.");
+                    throw new ArgumentException("The new passwords do not match.");
                 var oldValue = oldPassword.Text ?? "";
                 var newValue = newPassword.Text ?? "";
                 oldPassword.Clear();
@@ -133,9 +300,9 @@ internal sealed class VaultView : UserControl
                 confirmation.Clear();
                 await vault!.ChangePasswordAsync(oldValue, newValue);
                 ShowAccounts();
-                status.Text = "Пароль изменён.";
+                status.Text = "Password changed.";
             }),
-            Action("Назад", () => { ShowAccounts(); return Task.CompletedTask; })));
+            Action("Back", () => { ShowAccounts(); return Task.CompletedTask; })));
     }
 
     private async Task ImportFile()
@@ -143,7 +310,7 @@ internal sealed class VaultView : UserControl
         var picker = TopLevel.GetTopLevel(this)!.StorageProvider;
         var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Выберите изображение QR-кода",
+            Title = "Choose a QR image",
             FileTypeFilter = [FilePickerFileTypes.ImageAll]
         });
         if (files.Count > 0)
@@ -168,21 +335,22 @@ internal sealed class VaultView : UserControl
         while ((count = await stream.ReadAsync(chunk.AsMemory())) != 0)
         {
             if (buffer.Length + count > 20 * 1024 * 1024)
-                throw new FormatException("Размер файла превышает 20 МБ.");
+                throw new FormatException("The image exceeds 20 MB.");
             buffer.Write(chunk, 0, count);
         }
         buffer.Position = 0;
-        using var codec = SKCodec.Create(buffer) ?? throw new FormatException("Не удалось прочитать изображение.");
+        using var codec = SKCodec.Create(buffer) ?? throw new FormatException("Could not read the image.");
         var width = codec.Info.Width;
         var height = codec.Info.Height;
         if (width <= 0 || height <= 0 || (long)width * height > 20_000_000)
-            throw new FormatException("Разрешение изображения превышает 20 мегапикселей.");
+            throw new FormatException("The image exceeds 20 megapixels.");
 
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
         if (codec.GetPixels(bitmap.Info, bitmap.GetPixels()) != SKCodecResult.Success)
-            throw new FormatException("Не удалось прочитать изображение.");
+            throw new FormatException("Could not read the image.");
         var pixels = new byte[width * height * 4];
         Marshal.Copy(bitmap.GetPixels(), pixels, 0, pixels.Length);
+        // Composite transparency onto white so transparent QR backgrounds remain scannable.
         var grayscale = new byte[width * height];
         for (int pixel = 0, offset = 0; pixel < grayscale.Length; pixel++, offset += 4)
         {
@@ -196,12 +364,13 @@ internal sealed class VaultView : UserControl
             AutoRotate = true,
             Options = new DecodingOptions { PossibleFormats = [BarcodeFormat.QR_CODE], TryHarder = true }
         };
-        var result = reader.Decode(luminance) ?? throw new FormatException("QR-код на изображении не найден.");
+        var result = reader.Decode(luminance) ?? throw new FormatException("No QR code was found in the image.");
         await ImportAsync(QrImport.Parse(result.Text));
     }
 
     private async Task ImportAsync(ImportPage page)
     {
+        // Commit the migration once every page in the batch has been collected.
         var pages = new[] { page };
         if (page.BatchSize > 1)
         {
@@ -211,7 +380,7 @@ internal sealed class VaultView : UserControl
             pending[page.BatchIndex] = page;
             if (pending.Count != page.BatchSize)
             {
-                status.Text = $"Получено QR-кодов: {pending.Count} из {page.BatchSize}. Загрузите остальные.";
+                status.Text = $"Received {pending.Count} of {page.BatchSize} QR codes. Scan or upload the remaining codes.";
                 return;
             }
             pages = pending.Values.OrderBy(part => part.BatchIndex).ToArray();
@@ -220,7 +389,7 @@ internal sealed class VaultView : UserControl
         if (page.BatchSize > 1)
             pending.Clear();
         ShowAccounts();
-        status.Text = $"Добавлено: {added}. Пропущено неподдерживаемых: {pages.Sum(part => part.Skipped)}.";
+        status.Text = $"Added: {added}. Unsupported entries skipped: {pages.Sum(part => part.Skipped)}.";
     }
 
     private void RefreshCodes()
@@ -229,7 +398,7 @@ internal sealed class VaultView : UserControl
         foreach (var (account, code, remaining) in rows)
         {
             var seconds = account.Period - now.ToUnixTimeSeconds() % account.Period;
-            var text = $"Обновление через {seconds} с";
+            var text = $"Refreshes in {seconds}s";
             if (remaining.Text == text)
                 continue;
             code.Text = account.CodeAt(now);
@@ -259,6 +428,12 @@ internal sealed class VaultView : UserControl
         return panel;
     }
 
+    private Button Action(string label, System.Action run) => Action(label, () =>
+    {
+        run();
+        return Task.CompletedTask;
+    });
+
     private Button Action(string label, Func<Task> run)
     {
         var button = new Button { Content = label };
@@ -273,12 +448,12 @@ internal sealed class VaultView : UserControl
                 await run();
             }
             catch (Exception error) when (error is FormatException or ArgumentException or CryptographicException or
-                InvalidOperationException or OverflowException or IOException or JsonException)
+                InvalidOperationException or OverflowException or IOException or JsonException or UnauthorizedAccessException)
             {
                 status.Text = error switch
                 {
-                    Google.Protobuf.InvalidProtocolBufferException => "Повреждены данные экспорта Google Authenticator.",
-                    JsonException => "Хранилище повреждено.",
+                    Google.Protobuf.InvalidProtocolBufferException => "The Google Authenticator export is damaged.",
+                    JsonException => "The vault is damaged.",
                     _ => error.Message
                 };
             }
