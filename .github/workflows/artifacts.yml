@@ -1,0 +1,130 @@
+name: Build downloadable artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux:
+        description: Linux x64
+        type: boolean
+        default: false
+      macos:
+        description: macOS Apple Silicon
+        type: boolean
+        default: false
+      ios:
+        description: iOS (simulator and unsigned device build)
+        type: boolean
+        default: false
+      windows:
+        description: Windows x64
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - '.github/workflows/artifacts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.targets.outputs.desktop }}
+      has_desktop: ${{ steps.targets.outputs.has_desktop }}
+    steps:
+      - id: targets
+        env:
+          BUILD_LINUX: ${{ github.event_name == 'pull_request' || inputs.linux }}
+          BUILD_MACOS: ${{ github.event_name == 'pull_request' || inputs.macos }}
+          BUILD_IOS: ${{ github.event_name == 'pull_request' || inputs.ios }}
+          BUILD_WINDOWS: ${{ github.event_name == 'pull_request' || inputs.windows }}
+        run: |
+          set -euo pipefail
+          desktop=$(jq -cn '[
+            {rid: "linux-x64", runner: "ubuntu-latest", enabled: env.BUILD_LINUX},
+            {rid: "osx-arm64", runner: "macos-26", enabled: env.BUILD_MACOS},
+            {rid: "win-x64", runner: "windows-latest", enabled: env.BUILD_WINDOWS}
+          ] | map(select(.enabled == "true") | del(.enabled))')
+          has_desktop=$(jq -r 'length > 0' <<< "$desktop")
+          if [[ "$has_desktop" == false && "$BUILD_IOS" != true ]]; then
+            echo "::error::Select at least one platform."
+            exit 1
+          fi
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
+          echo "has_desktop=$has_desktop" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    needs: select
+    if: ${{ needs.select.outputs.has_desktop == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.desktop) }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish self-contained application
+        shell: bash
+        run: dotnet publish src/Totp.Desktop -c Release -r "$RID" --self-contained true -o publish
+      - name: Archive Linux or macOS application
+        if: runner.os != 'Windows'
+        run: |
+          test -x publish/Totp.Desktop
+          mkdir dist
+          tar -czf "dist/TotpEverywhere-${RID}.tar.gz" -C publish .
+      - name: Archive Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path publish/Totp.Desktop.exe -PathType Leaf)) {
+            throw "Published executable is missing."
+          }
+          New-Item -ItemType Directory -Path dist
+          Compress-Archive -Path publish/* -DestinationPath "dist/TotpEverywhere-${env:RID}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TotpEverywhere-${{ matrix.rid }}
+          path: dist/
+          if-no-files-found: error
+
+  ios:
+    needs: select
+    if: ${{ github.event_name == 'pull_request' || inputs.ios }}
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: iossimulator-arm64
+            code_signing: 'true'
+          - rid: ios-arm64
+            code_signing: 'false'
+    env:
+      RID: ${{ matrix.rid }}
+      CODE_SIGNING: ${{ matrix.code_signing }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.404
+      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - run: dotnet workload install ios --skip-manifest-update
+      - name: Build iOS application bundle
+        run: dotnet build src/Totp.iOS -c Release -r "$RID" -p:EnableCodeSigning="$CODE_SIGNING"
+      - name: Archive application bundle
+        run: |
+          app="src/Totp.iOS/bin/Release/net10.0-ios/$RID/Totp.iOS.app"
+          test -f "$app/Info.plist"
+          mkdir dist
+          ditto -c -k --keepParent "$app" "dist/TotpEverywhere-${RID}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TotpEverywhere-${{ matrix.rid }}
+          path: dist/
+          if-no-files-found: error

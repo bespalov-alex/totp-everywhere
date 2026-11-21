@@ -55,6 +55,20 @@ dotnet build src/Totp.iOS -t:Run -r iossimulator-arm64 --no-restore
 
 Для Intel Mac используйте `iossimulator-x64`. Для камеры требуется физическое устройство с разрешением на съёмку и подписанной сборкой `ios-arm64`. Загрузку изображений можно использовать и в симуляторе.
 
+## Скачать сборку из GitHub Actions
+
+На странице **Actions → Build downloadable artifacts** нажмите **Run workflow** и отметьте одну или несколько платформ. После завершения откройте запуск и скачайте архивы из раздела **Artifacts**. Ручной запуск доступен после появления workflow в ветке по умолчанию.
+
+| Выбор | Артефакт | Запуск |
+| --- | --- | --- |
+| Linux | `TotpEverywhere-linux-x64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop`. |
+| macOS Apple Silicon | `TotpEverywhere-osx-arm64` | Распакуйте `.tar.gz` и запустите `./Totp.Desktop` из Terminal. |
+| Windows | `TotpEverywhere-win-x64` | Распакуйте `.zip` и запустите `Totp.Desktop.exe`. |
+| iOS | `TotpEverywhere-iossimulator-arm64` | Распакуйте `.app` и установите в запущенный симулятор командой `xcrun simctl install booted ./Totp.iOS.app`. |
+| iOS | `TotpEverywhere-ios-arm64` | Сборка `.app` для физического устройства. Перед установкой требуется подписать её сертификатом Apple и подходящим provisioning profile. |
+
+Артефакты GitHub скачиваются как ZIP с архивом приложения внутри. Сохраняйте все файлы распакованного приложения в одном каталоге. Сборки Desktop включают среду выполнения .NET.
+
 ## Импорт и пароль
 
 1. Введите логин и пароль длиной от 12 символов. При первом запуске нажмите **Регистрация**, при следующих запусках нажимайте **Войти**.
