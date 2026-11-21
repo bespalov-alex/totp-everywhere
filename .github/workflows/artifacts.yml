@@ -19,6 +19,10 @@ on:
         description: Windows x64
         type: boolean
         default: false
+      android:
+        description: Android APK (arm64)
+        type: boolean
+        default: false
       web:
         description: Web (static WebAssembly site)
         type: boolean
@@ -27,6 +31,7 @@ on:
     paths:
       - '.github/workflows/artifacts.yml'
       - 'packaging/macos/**'
+      - 'src/Totp.Android/**'
 
 permissions:
   contents: read
@@ -44,6 +49,7 @@ jobs:
           BUILD_MACOS: ${{ github.event_name == 'pull_request' || inputs.macos }}
           BUILD_IOS: ${{ github.event_name == 'pull_request' || inputs.ios }}
           BUILD_WINDOWS: ${{ github.event_name == 'pull_request' || inputs.windows }}
+          BUILD_ANDROID: ${{ github.event_name == 'pull_request' || inputs.android }}
           BUILD_WEB: ${{ github.event_name == 'pull_request' || inputs.web }}
         run: |
           set -euo pipefail
@@ -53,7 +59,7 @@ jobs:
             {rid: "win-x64", runner: "windows-latest", enabled: env.BUILD_WINDOWS}
           ] | map(select(.enabled == "true") | del(.enabled))')
           has_desktop=$(jq -r 'length > 0' <<< "$desktop")
-          if [[ "$has_desktop" == false && "$BUILD_IOS" != true && "$BUILD_WEB" != true ]]; then
+          if [[ "$has_desktop" == false && "$BUILD_IOS" != true && "$BUILD_WEB" != true && "$BUILD_ANDROID" != true ]]; then
             echo "::error::Select at least one platform."
             exit 1
           fi
@@ -183,4 +189,35 @@ jobs:
         with:
           name: TotpEverywhere-web
           path: dist/TotpEverywhere-web.tar.gz
+          if-no-files-found: error
+
+  android:
+    needs: select
+    if: ${{ github.event_name == 'pull_request' || inputs.android }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: dotnet workload install android
+      - name: Install Android SDK dependencies
+        run: |
+          dotnet build src/Totp.Android -t:InstallAndroidDependencies \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME" \
+            -p:AcceptAndroidSDKLicenses=true
+      - name: Publish installable Android APK
+        run: |
+          dotnet publish src/Totp.Android -c Release -r android-arm64 -o publish \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME"
+          mkdir dist
+          cp publish/com.bespalov.totpeverywhere-Signed.apk dist/TotpEverywhere-android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TotpEverywhere-android-arm64
+          path: dist/TotpEverywhere-android-arm64.apk
           if-no-files-found: error

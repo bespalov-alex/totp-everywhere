@@ -18,7 +18,7 @@ using FormatException = System.FormatException;
 
 namespace Totp.App;
 
-internal sealed class VaultView : UserControl
+internal sealed partial class VaultView : UserControl
 {
     private IVaultStorage storage;
     private readonly Func<string?, IVaultStorage>? selectVaultDirectory;
@@ -82,6 +82,7 @@ internal sealed class VaultView : UserControl
         body.Children.Add(Buttons(
             Action("Sign in", () => Open(login, password, false)),
             Action("Register", () => Open(login, password, true)),
+            Action("Import vault", ShowTransfers),
             Action("Storage settings", () => ShowStorageSettings())));
     }
 
@@ -99,6 +100,7 @@ internal sealed class VaultView : UserControl
         body.Children.Clear();
         body.Children.Add(Buttons(
             Action("Add account", () => ShowAddAccount()),
+            Action("Transfer vault", ShowTransfers),
             Action("Storage settings", () => ShowStorageSettings()),
             Action("Change password", () => ShowPasswordChange()),
             Action("Sign out", () => { Lock(); ShowLogin(); })));
@@ -305,7 +307,21 @@ internal sealed class VaultView : UserControl
             Action("Back", () => { ShowAccounts(); return Task.CompletedTask; })));
     }
 
-    private async Task ImportFile()
+    private async Task ImportFile() => await ImportScannedAccount(await ReadPickedQr());
+
+    private async Task ImportCamera() => await ImportScannedAccount(await ReadCameraQr());
+
+    private async Task ImportScannedAccount(string? text)
+    {
+        if (text is null)
+            return;
+        if (text.StartsWith(VaultTransfer.QrPrefix, StringComparison.Ordinal))
+            ShowTransferCredentials(text);
+        else
+            await ImportAsync(QrImport.Parse(text));
+    }
+
+    private async Task<string?> ReadPickedQr()
     {
         var picker = TopLevel.GetTopLevel(this)!.StorageProvider;
         var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -313,21 +329,20 @@ internal sealed class VaultView : UserControl
             Title = "Choose a QR image",
             FileTypeFilter = [FilePickerFileTypes.ImageAll]
         });
-        if (files.Count > 0)
-        {
-            await using var stream = await files[0].OpenReadAsync();
-            await ImportImage(stream);
-        }
+        if (files.Count == 0)
+            return null;
+        using var file = files[0];
+        await using var stream = await file.OpenReadAsync();
+        return await ReadQrImage(stream);
     }
 
-    private async Task ImportCamera()
+    private async Task<string?> ReadCameraQr()
     {
         await using var stream = await capturePhoto();
-        if (stream is not null)
-            await ImportImage(stream);
+        return stream is null ? null : await ReadQrImage(stream);
     }
 
-    private async Task ImportImage(Stream stream)
+    private static async Task<string> ReadQrImage(Stream stream)
     {
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
@@ -365,7 +380,7 @@ internal sealed class VaultView : UserControl
             Options = new DecodingOptions { PossibleFormats = [BarcodeFormat.QR_CODE], TryHarder = true }
         };
         var result = reader.Decode(luminance) ?? throw new FormatException("No QR code was found in the image.");
-        await ImportAsync(QrImport.Parse(result.Text));
+        return result.Text;
     }
 
     private async Task ImportAsync(ImportPage page)
@@ -408,6 +423,8 @@ internal sealed class VaultView : UserControl
 
     private void Lock()
     {
+        transferQrImage?.Dispose();
+        transferQrImage = null;
         vault?.Dispose();
         vault = null;
         rows.Clear();

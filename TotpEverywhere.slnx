@@ -5,6 +5,7 @@
     <Project Path="src/Totp.Desktop/Totp.Desktop.csproj" />
     <Project Path="src/Totp.Browser/Totp.Browser.csproj" />
     <Project Path="src/Totp.iOS/Totp.iOS.csproj" />
+    <Project Path="src/Totp.Android/Totp.Android.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Totp.Tests/Totp.Tests.csproj" />
