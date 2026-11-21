@@ -27,6 +27,21 @@ globalThis.totpDeriveKey = async (credential, salt, iterations) => {
     }
 };
 
+// A Blob download also works when the browser has no native file save picker.
+globalThis.totpDownload = (name, bytes) => {
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    try {
+        link.click();
+    } finally {
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+};
+
 globalThis.totpCamera = async () => {
     const dialog = document.createElement("dialog");
     const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true });

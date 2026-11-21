@@ -54,12 +54,20 @@ internal sealed partial class VaultView
 
     private async Task ExportTransferFile(VaultTransfer transfer)
     {
+        const string fileName = "totp-everywhere-transfer.json";
         var bytes = Encoding.UTF8.GetBytes(transfer.ToFile());
+        if (App.DownloadFile is { } download)
+        {
+            download(fileName, bytes);
+            status.Text = "Encrypted transfer file exported.";
+            return;
+        }
+
         var picker = TopLevel.GetTopLevel(this)!.StorageProvider;
         using var file = await picker.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export encrypted vault",
-            SuggestedFileName = "totp-everywhere-transfer.json",
+            SuggestedFileName = fileName,
             DefaultExtension = "json",
             FileTypeChoices = [TransferFileType],
             ShowOverwritePrompt = true

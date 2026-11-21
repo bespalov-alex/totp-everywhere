@@ -14,6 +14,11 @@ internal static partial class Program
     {
         App.Storage = new BrowserStorage();
         App.KeyDeriver = DeriveKeyAsync;
+        App.DownloadFile = (name, bytes) =>
+        {
+            try { Download(name, bytes); }
+            catch (JSException ex) { throw new IOException("The browser could not download the transfer.", ex); }
+        };
         App.CapturePhoto = async () =>
         {
             var result = await Camera();
@@ -42,6 +47,9 @@ internal static partial class Program
     [JSImport("globalThis.totpDeriveKey")]
     [return: JSMarshalAs<JSType.Promise<JSType.String>>]
     private static partial Task<string> DeriveKey(byte[] credential, byte[] salt, int iterations);
+
+    [JSImport("globalThis.totpDownload")]
+    private static partial void Download(string name, byte[] bytes);
 
     [JSImport("globalThis.totpCamera")]
     [return: JSMarshalAs<JSType.Promise<JSType.String>>]

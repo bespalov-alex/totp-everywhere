@@ -6,7 +6,7 @@ using Android.Provider;
 using Android.Runtime;
 using AndroidX.Core.Content;
 using Avalonia.Android;
-using Totp.App;
+using TotpApplication = Totp.App.App;
 using Totp.Core;
 
 namespace Totp.Android;
@@ -14,15 +14,15 @@ namespace Totp.Android;
 [Activity(Label = "TOTP Everywhere", Theme = "@style/TotpTheme", Icon = "@drawable/app_icon",
     MainLauncher = true, Exported = true,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
-public sealed class MainActivity : AvaloniaMainActivity<App>
+public sealed class MainActivity : AvaloniaMainActivity<TotpApplication>
 {
     private const int CameraRequest = 197;
     private TaskCompletionSource<bool>? captureResult;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
-        App.Storage = new FileVaultStorage(Path.Combine(FilesDir!.AbsolutePath, "TotpEverywhere"));
-        App.CapturePhoto = CaptureAsync;
+        TotpApplication.Storage = new FileVaultStorage(Path.Combine(FilesDir!.AbsolutePath, "TotpEverywhere"));
+        TotpApplication.CapturePhoto = CaptureAsync;
         base.OnCreate(savedInstanceState);
     }
 
