@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using Avalonia;
@@ -12,6 +13,7 @@ internal static partial class Program
     private static Task Main()
     {
         App.Storage = new BrowserStorage();
+        App.KeyDeriver = DeriveKeyAsync;
         App.CapturePhoto = async () =>
         {
             var result = await Camera();
@@ -23,6 +25,23 @@ internal static partial class Program
         };
         return AppBuilder.Configure<App>().StartBrowserAppAsync("app");
     }
+
+    private static async Task<byte[]> DeriveKeyAsync(byte[] credential, byte[] salt, int iterations)
+    {
+        try
+        {
+            var result = await DeriveKey(credential, salt, iterations);
+            return Convert.FromBase64String(result);
+        }
+        catch (JSException)
+        {
+            throw new CryptographicException("Web Crypto недоступен. Откройте приложение по HTTPS или на localhost.");
+        }
+    }
+
+    [JSImport("globalThis.totpDeriveKey")]
+    [return: JSMarshalAs<JSType.Promise<JSType.String>>]
+    private static partial Task<string> DeriveKey(byte[] credential, byte[] salt, int iterations);
 
     [JSImport("globalThis.totpCamera")]
     [return: JSMarshalAs<JSType.Promise<JSType.String>>]

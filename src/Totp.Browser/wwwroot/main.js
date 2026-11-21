@@ -10,6 +10,21 @@ globalThis.totpReplace = async (id, expected, value) => navigator.locks.request(
     return true;
 });
 
+globalThis.totpDeriveKey = async (credential, salt, iterations) => {
+    try {
+        const key = await crypto.subtle.importKey("raw", credential, "PBKDF2", false, ["deriveBits"]);
+        const result = new Uint8Array(await crypto.subtle.deriveBits(
+            { name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256));
+        try {
+            return btoa(String.fromCharCode(...result));
+        } finally {
+            result.fill(0);
+        }
+    } finally {
+        credential.fill(0);
+    }
+};
+
 globalThis.totpCamera = async () => {
     const dialog = document.createElement("dialog");
     const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true });

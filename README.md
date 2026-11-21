@@ -13,7 +13,7 @@
 
 ## Запуск
 
-Установите [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Выполняйте команды из корня репозитория. Полное решение `TotpEverywhere.slnx` включает iOS и требует macOS, Xcode и оба workload.
+Установите .NET 10 SDK и выполняйте команды из корня репозитория. Полное решение `TotpEverywhere.slnx` включает iOS и требует macOS, Xcode и оба workload. [Скачать .NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Windows, macOS и Linux
 
@@ -23,7 +23,7 @@ dotnet build src/Totp.Desktop --no-restore
 dotnet run --project src/Totp.Desktop --no-build
 ```
 
-Для камеры установите [FFmpeg](https://ffmpeg.org/download.html) и добавьте его в `PATH`. Поместите QR-код в кадр и нажмите **Камера**. Приложение сделает снимок примерно через секунду.
+Для камеры установите FFmpeg и добавьте его в `PATH`. Поместите QR-код в кадр и нажмите **Камера**. Приложение сделает снимок примерно через секунду. [Скачать FFmpeg](https://ffmpeg.org/download.html)
 
 | ОС | Выбор устройства |
 | --- | --- |
@@ -40,7 +40,7 @@ dotnet build src/Totp.Browser --no-restore
 dotnet run --project src/Totp.Browser --no-build
 ```
 
-Откройте адрес, выведенный в терминале. Используйте актуальный браузер с WebAssembly и Web Locks. Для доступа к камере и Web Locks нужен HTTPS или localhost. Во вкладке камеры наведите её на QR и нажмите **Снять QR**.
+Откройте адрес, выведенный в терминале. Используйте актуальный браузер с WebAssembly, Web Crypto и Web Locks. Для доступа к камере, Web Crypto и Web Locks нужен HTTPS или localhost. Во вкладке камеры наведите её на QR и нажмите **Снять QR**.
 
 ### iOS
 

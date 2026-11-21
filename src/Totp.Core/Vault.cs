@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Modes;
 using Org.BouncyCastle.Crypto.Parameters;
 
@@ -51,12 +50,15 @@ public sealed class FileVaultStorage(string directory) : IVaultStorage
     }
 }
 
+public delegate Task<byte[]> VaultKeyDeriver(byte[] credential, byte[] salt, int iterations);
+
 public sealed class Vault : IDisposable
 {
     private const int Iterations = 600_000;
     private readonly IVaultStorage storage;
     private readonly string login;
     private readonly string id;
+    private readonly VaultKeyDeriver keyDeriver;
     private byte[] key;
     private byte[] salt;
     private string snapshot;
@@ -64,7 +66,7 @@ public sealed class Vault : IDisposable
     private bool disposed;
 
     private Vault(IVaultStorage storage, string login, string id, byte[] key, byte[] salt, string snapshot,
-        TotpAccount[] accounts)
+        TotpAccount[] accounts, VaultKeyDeriver keyDeriver)
     {
         this.storage = storage;
         this.login = login;
@@ -73,11 +75,13 @@ public sealed class Vault : IDisposable
         this.salt = salt;
         this.snapshot = snapshot;
         this.accounts = accounts;
+        this.keyDeriver = keyDeriver;
     }
 
     public IReadOnlyList<TotpAccount> Accounts => Array.AsReadOnly(accounts);
 
-    public static async Task<Vault> OpenAsync(IVaultStorage storage, string login, string password, bool register = false)
+    public static async Task<Vault> OpenAsync(IVaultStorage storage, string login, string password, bool register = false,
+        VaultKeyDeriver? keyDeriver = null)
     {
         login = login.Trim().Normalize();
         if (login.Length is < 1 or > 128 || password.Length is < 1 or > 1024)
@@ -98,7 +102,8 @@ public sealed class Vault : IDisposable
 
         var envelope = snapshot is null ? null : ReadEnvelope(snapshot);
         var salt = envelope?.Salt ?? RandomNumberGenerator.GetBytes(16);
-        var key = Derive(login, password, salt);
+        keyDeriver ??= DeriveOnDeviceAsync;
+        var key = await DeriveAsync(keyDeriver, login, password, salt);
         try
         {
             var accounts = envelope is null ? [] : Decrypt(envelope, key, id);
@@ -107,7 +112,7 @@ public sealed class Vault : IDisposable
                 snapshot = Encrypt(accounts, key, salt, id);
                 await storage.ReplaceAsync(id, null, snapshot);
             }
-            return new Vault(storage, login, id, key, salt, snapshot, accounts);
+            return new Vault(storage, login, id, key, salt, snapshot, accounts, keyDeriver);
         }
         catch
         {
@@ -132,14 +137,14 @@ public sealed class Vault : IDisposable
         ValidateNewPassword(newPassword);
         if (oldPassword.Length is < 1 or > 1024)
             throw new CryptographicException("Неверный старый пароль.");
-        var oldKey = Derive(login, oldPassword, salt);
+        var oldKey = await DeriveAsync(keyDeriver, login, oldPassword, salt);
         var matches = CryptographicOperations.FixedTimeEquals(key, oldKey);
         CryptographicOperations.ZeroMemory(oldKey);
         if (!matches)
             throw new CryptographicException("Неверный старый пароль.");
 
         var newSalt = RandomNumberGenerator.GetBytes(16);
-        var newKey = Derive(login, newPassword, newSalt);
+        var newKey = await DeriveAsync(keyDeriver, login, newPassword, newSalt);
         try
         {
             await SaveAsync(accounts, newKey, newSalt);
@@ -168,14 +173,15 @@ public sealed class Vault : IDisposable
             throw new ArgumentException("Пароль должен содержать от 12 до 1024 символов.");
     }
 
-    private static byte[] Derive(string login, string password, byte[] salt)
+    private static Task<byte[]> DeriveOnDeviceAsync(byte[] credential, byte[] salt, int iterations) =>
+        Task.Run(() => Rfc2898DeriveBytes.Pbkdf2(credential, salt, iterations, HashAlgorithmName.SHA256, 32));
+
+    private static async Task<byte[]> DeriveAsync(VaultKeyDeriver derive, string login, string password, byte[] salt)
     {
-        var credential = Encoding.UTF8.GetBytes($"{login.Length}:{login}{password}");
+        var credential = Encoding.UTF8.GetBytes(FormattableString.Invariant($"{login.Length}:{login}{password}"));
         try
         {
-            var generator = new Pkcs5S2ParametersGenerator(new Sha256Digest());
-            generator.Init(credential, salt, Iterations);
-            return ((KeyParameter)generator.GenerateDerivedMacParameters(256)).GetKey();
+            return await derive(credential, salt, Iterations);
         }
         finally
         {

@@ -19,6 +19,7 @@ internal sealed class VaultView : UserControl
 {
     private readonly IVaultStorage storage;
     private readonly Func<Task<Stream?>> capturePhoto;
+    private readonly VaultKeyDeriver? keyDeriver;
     private readonly StackPanel body = new() { Spacing = 14 };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly List<(TotpAccount Account, TextBlock Code, TextBlock Remaining)> rows = [];
@@ -27,10 +28,11 @@ internal sealed class VaultView : UserControl
     private Vault? vault;
     private bool busy;
 
-    public VaultView(IVaultStorage storage, Func<Task<Stream?>> capturePhoto)
+    public VaultView(IVaultStorage storage, Func<Task<Stream?>> capturePhoto, VaultKeyDeriver? keyDeriver)
     {
         this.storage = storage;
         this.capturePhoto = capturePhoto;
+        this.keyDeriver = keyDeriver;
         Content = new ScrollViewer
         {
             Content = new StackPanel
@@ -66,7 +68,7 @@ internal sealed class VaultView : UserControl
     {
         var value = password.Text ?? "";
         password.Clear();
-        vault = await Vault.OpenAsync(storage, login.Text ?? "", value, register);
+        vault = await Vault.OpenAsync(storage, login.Text ?? "", value, register, keyDeriver);
         ShowAccounts();
     }
 
