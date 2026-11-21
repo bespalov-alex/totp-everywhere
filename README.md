@@ -70,6 +70,16 @@ Open **Actions → Build downloadable artifacts → Run workflow**, select the p
 
 The macOS app uses an ad hoc signature. If Gatekeeper blocks a trusted download, try opening it first and then choose **System Settings → Privacy & Security → Open Anyway** when available. Automatic trust for distributed macOS builds requires Developer ID signing and Apple notarization.
 
+## Publish to GitHub Pages on demand
+
+1. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**. GitHub Pages for private repositories requires a supported GitHub plan. Check the site's visibility before enabling it.
+2. Once this workflow is on `main`, open **Actions → Deploy Web to GitHub Pages → Run workflow** and select `main`.
+3. Open the deployment URL shown in the workflow. For this repository, the default project site is `https://bespalov-alex.github.io/totp-everywhere/`.
+
+The workflow uploads `publish/wwwroot` as a temporary Pages artifact. The repository contains source files and the workflow. The site is deployed without a `gh-pages` branch or a commit of generated files.
+
+Vaults are stored in the browser for the current origin. Use **Transfer vault** and **Import vault** to move an existing vault from localhost or another origin to the Pages site.
+
 ## Accounts and storage
 
 1. Register with a username and password of at least 12 characters.
