@@ -2,6 +2,12 @@ name: Deploy Web to GitHub Pages
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'global.json'
+      - '.github/workflows/pages.yml'
+      - 'scripts/check-web-publish.py'
+      - 'src/Totp.Browser/**'
 
 permissions:
   contents: read
@@ -12,24 +18,31 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
-      - run: dotnet workload install wasm-tools
+          global-json-file: global.json
+      - run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish WebAssembly site
         run: |
           dotnet publish src/Totp.Browser -c Release -o publish
           test -s publish/wwwroot/index.html
           test -s publish/wwwroot/_framework/dotnet.js
+      - name: Verify published site in Chromium
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pages-smoke"
+          "$RUNNER_TEMP/pages-smoke/bin/pip" install 'playwright==1.58.0'
+          "$RUNNER_TEMP/pages-smoke/bin/python" scripts/check-web-publish.py publish/wwwroot
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'workflow_dispatch'
         with:
           path: publish/wwwroot
 
   deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:

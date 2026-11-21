@@ -3,6 +3,8 @@
     <TargetFramework>net10.0-browser</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WasmEnableWebcil>true</WasmEnableWebcil>
+    <!-- Skia and HarfBuzz require the native WebAssembly libraries at runtime. -->
+    <WasmBuildNative>true</WasmBuildNative>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Totp.App/Totp.App.csproj" />

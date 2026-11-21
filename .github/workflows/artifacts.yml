@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - name: Publish self-contained application
         if: runner.os != 'Windows'
         run: dotnet publish src/Totp.Desktop -c Release -r "$RID" --self-contained true -o publish
@@ -176,8 +176,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
-      - run: dotnet workload install wasm-tools
+          global-json-file: global.json
+      - run: dotnet workload install wasm-tools --skip-manifest-update
       - name: Publish static site
         run: |
           dotnet publish src/Totp.Browser -c Release -o publish
@@ -199,7 +199,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
